@@ -1,4 +1,4 @@
-# ScrabbViz - Grocery Product Relationship Visualizer
+# Grocery Product Relationship Visualizer
 
 A React + TypeScript application that visualizes grocery products in 2D space, showing relationships across two dimensions: pack size (horizontal axis) and brand (vertical axis).
 

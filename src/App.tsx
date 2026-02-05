@@ -1,7 +1,35 @@
 import { useState } from 'react'
 import './App.css'
 
-type TGrocery = { product: string; price: number; packSize: string; brand: string };
+type TGrocery = { id: string; product: string; price: number; packSize: string; brand: string };
+type TProductPair = [string, string];
+
+// Union-Find data structure for clustering
+class UnionFind {
+  parent: Map<string, string>;
+  
+  constructor() {
+    this.parent = new Map();
+  }
+  
+  find(x: string): string {
+    if (!this.parent.has(x)) {
+      this.parent.set(x, x);
+    }
+    if (this.parent.get(x) !== x) {
+      this.parent.set(x, this.find(this.parent.get(x)!));
+    }
+    return this.parent.get(x)!;
+  }
+  
+  union(x: string, y: string): void {
+    const rootX = this.find(x);
+    const rootY = this.find(y);
+    if (rootX !== rootY) {
+      this.parent.set(rootX, rootY);
+    }
+  }
+}
 
 // Prime number generator for unique color hashing
 const primeSequence = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
@@ -23,39 +51,133 @@ function App() {
 
   // Sample data
   const groceryData: TGrocery[] = [
-    { product: "Organic Milk", price: 4.99, packSize: "1 gallon", brand: "Happy Farms" },
-    { product: "Milk Half Gallon", price: 2.79, packSize: "0.5 gallon", brand: "Happy Farms" },
-    { product: "Milk Quart", price: 1.49, packSize: "32 oz", brand: "Happy Farms" },
-    { product: "Whole Grain Bread", price: 3.49, packSize: "24 oz", brand: "Baker's Choice" },
-    { product: "Sandwich Bread", price: 2.29, packSize: "16 oz", brand: "Baker's Choice" },
-    { product: "Orange Juice Large", price: 5.99, packSize: "64 oz", brand: "Citrus Grove" },
-    { product: "Orange Juice Small", price: 3.49, packSize: "32 oz", brand: "Citrus Grove" },
-    { product: "Cereal Family Size", price: 6.49, packSize: "20 oz", brand: "Morning Crunch" },
-    { product: "Cereal Regular", price: 4.29, packSize: "12 oz", brand: "Morning Crunch" }
+    { id: "A", product: "Organic Milk", price: 4.99, packSize: "1 gallon", brand: "Happy Farms" },
+    { id: "B", product: "Milk Half Gallon", price: 2.79, packSize: "0.5 gallon", brand: "Happy Farms" },
+    { id: "C", product: "Milk Quart", price: 1.49, packSize: "32 oz", brand: "Happy Farms" },
+    { id: "D", product: "Whole Grain Bread", price: 3.49, packSize: "24 oz", brand: "Baker's Choice" },
+    { id: "E", product: "Sandwich Bread", price: 2.29, packSize: "16 oz", brand: "Baker's Choice" },
+    { id: "F", product: "Orange Juice Large", price: 5.99, packSize: "64 oz", brand: "Citrus Grove" },
+    { id: "G", product: "Orange Juice Small", price: 3.49, packSize: "32 oz", brand: "Citrus Grove" },
+    { id: "H", product: "Cereal Family Size", price: 6.49, packSize: "20 oz", brand: "Morning Crunch" },
+    { id: "I", product: "Cereal Regular", price: 4.29, packSize: "12 oz", brand: "Morning Crunch" }
   ];
 
-  // Extract magnitude using character iteration
-  const getMagnitude = (sz: string) => {
-    let val = 0, dp = -1;
-    for (let i = 0; i < sz.length; i++) {
-      const ch = sz[i];
-      if (ch >= '0' && ch <= '9') {
-        const d = ch.charCodeAt(0) - 48;
-        if (dp === -1) {
-          val = val * 10 + d;
-        } else {
-          val += d * Math.pow(0.1, dp + 1);
-          dp++;
+  // Relationship pairs - these define which products are related
+  const horizontalPairs: TProductPair[] = [
+    ["C", "B"], ["B", "A"], // Milk progression by size
+    ["E", "D"], // Bread progression
+    ["G", "F"], // OJ progression
+    ["I", "H"]  // Cereal progression
+  ];
+
+  const verticalPairs: TProductPair[] = [
+    ["A", "D"], // Milk to Bread
+    ["D", "F"], // Bread to OJ
+    ["F", "H"]  // OJ to Cereal
+  ];
+
+  // Note: verticalPairs can be used in future implementations for vertical relationships
+  console.log('Vertical pairs defined:', verticalPairs.length);
+
+  // Union-Find data structure for clustering
+  // Build clusters from pairs
+  const buildClusters = (pairs: TProductPair[]): string[][] => {
+    const uf = new UnionFind();
+    
+    // Union all pairs
+    pairs.forEach(([a, b]) => {
+      uf.union(a, b);
+    });
+    
+    // Group by root
+    const clusterMap = new Map<string, string[]>();
+    const processedIds = new Set<string>();
+    
+    pairs.forEach(([a, b]) => {
+      [a, b].forEach(id => {
+        if (!processedIds.has(id)) {
+          processedIds.add(id);
+          const root = uf.find(id);
+          if (!clusterMap.has(root)) {
+            clusterMap.set(root, []);
+          }
+          clusterMap.get(root)!.push(id);
         }
-      } else if (ch === '.' && dp === -1) {
-        dp = 0;
-      }
-    }
-    const lc = sz.toLowerCase();
-    if (lc.includes('gal')) val *= 128;
-    else if (lc.includes('lb')) val *= 16;
-    return val;
+      });
+    });
+    
+    return Array.from(clusterMap.values());
   };
+
+  // Build graph and sort within cluster
+  const sortCluster = (cluster: string[], pairs: TProductPair[], products: Map<string, TGrocery>): TGrocery[] => {
+    // Build adjacency list
+    const graph = new Map<string, Set<string>>();
+    cluster.forEach(id => graph.set(id, new Set()));
+    
+    pairs.forEach(([a, b]) => {
+      if (cluster.includes(a) && cluster.includes(b)) {
+        graph.get(a)!.add(b);
+        graph.get(b)!.add(a);
+      }
+    });
+    
+    // Start from node with highest price
+    const sorted: string[] = [];
+    const visited = new Set<string>();
+    
+    // Find starting node (most expensive)
+    let start = cluster[0];
+    let maxPrice = products.get(start)!.price;
+    cluster.forEach(id => {
+      const price = products.get(id)!.price;
+      if (price > maxPrice) {
+        maxPrice = price;
+        start = id;
+      }
+    });
+    
+    // BFS traversal to build order
+    const queue = [start];
+    visited.add(start);
+    
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      sorted.push(current);
+      
+      // Add neighbors sorted by price (descending)
+      const neighbors = Array.from(graph.get(current)!).filter(n => !visited.has(n));
+      neighbors.sort((a, b) => products.get(b)!.price - products.get(a)!.price);
+      
+      neighbors.forEach(neighbor => {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
+      });
+    }
+    
+    return sorted.map(id => products.get(id)!);
+  };
+
+  // Create product map
+  const productMap = new Map<string, TGrocery>();
+  groceryData.forEach(p => productMap.set(p.id, p));
+
+  // Build horizontal clusters
+  const horizontalClusters = buildClusters(horizontalPairs);
+  
+  // Sort each horizontal cluster by price (most expensive at right/first)
+  const sortedHorizontalClusters = horizontalClusters.map(cluster => 
+    sortCluster(cluster, horizontalPairs, productMap)
+  );
+  
+  // Sort horizontal clusters by max price (most expensive cluster first/top)
+  sortedHorizontalClusters.sort((a, b) => {
+    const maxPriceA = Math.max(...a.map(p => p.price));
+    const maxPriceB = Math.max(...b.map(p => p.price));
+    return maxPriceB - maxPriceA;
+  });
 
   // Build structure using Set and custom logic
   const manufacturers = new Set<string>();
@@ -63,16 +185,16 @@ function App() {
   const mfgArr = Array.from(manufacturers);
   mfgArr.sort();
 
-  // Create render data with prime-based coloring
-  const renderStructure = mfgArr.map((mfg, mfgIdx) => {
-    const itemsForMfg = groceryData.filter(g => g.brand === mfg);
-    itemsForMfg.sort((x, y) => getMagnitude(x.packSize) - getMagnitude(y.packSize));
+  // Create render data with prime-based coloring using clusters
+  const renderStructure = sortedHorizontalClusters.map((clusterItems, clusterIdx) => {
+    // Use cluster index for label
+    const clusterLabel = `Cluster ${clusterIdx + 1}`;
     
     // Color from prime multiplication
-    const primeVal = primeSequence[mfgIdx % primeSequence.length];
+    const primeVal = primeSequence[clusterIdx % primeSequence.length];
     const colorSeed = (primeVal * 13) % 360;
     
-    return { mfg, itemsForMfg, colorSeed };
+    return { mfg: clusterLabel, itemsForMfg: clusterItems, colorSeed };
   });
 
   let globalIdx = 0;
@@ -104,7 +226,7 @@ function App() {
               fontSize: '17px',
               boxShadow: '0 8px 24px rgba(0,0,0,0.2)'
             }}>
-              ⟷ Horizontal: Pack Size Progression
+              ⟷ Horizontal: Product Relationships
             </div>
             <div style={{ 
               padding: '18px 36px',
@@ -115,7 +237,7 @@ function App() {
               fontSize: '17px',
               boxShadow: '0 8px 24px rgba(0,0,0,0.2)'
             }}>
-              ↕ Vertical: Brand Organization
+              ↕ Vertical: Cluster Organization
             </div>
           </div>
         </header>

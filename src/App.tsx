@@ -70,16 +70,19 @@ function App() {
     ["I", "H"]  // Cereal progression
   ];
 
+  // Vertical pairs define cross-cluster relationships
+  // Currently reserved for future vertical organization features
   const verticalPairs: TProductPair[] = [
     ["A", "D"], // Milk to Bread
     ["D", "F"], // Bread to OJ
     ["F", "H"]  // OJ to Cereal
   ];
 
-  // Note: verticalPairs can be used in future implementations for vertical relationships
-  console.log('Vertical pairs defined:', verticalPairs.length);
+  // Verify vertical pairs are defined (for future use)
+  if (verticalPairs.length === 0) {
+    console.warn('No vertical pairs defined');
+  }
 
-  // Union-Find data structure for clustering
   // Build clusters from pairs
   const buildClusters = (pairs: TProductPair[]): string[][] => {
     const uf = new UnionFind();
@@ -137,12 +140,13 @@ function App() {
       }
     });
     
-    // BFS traversal to build order
+    // BFS traversal to build order (using index for O(1) dequeue)
     const queue = [start];
+    let queueIndex = 0;
     visited.add(start);
     
-    while (queue.length > 0) {
-      const current = queue.shift()!;
+    while (queueIndex < queue.length) {
+      const current = queue[queueIndex++];
       sorted.push(current);
       
       // Add neighbors sorted by price (descending)
@@ -178,12 +182,6 @@ function App() {
     const maxPriceB = Math.max(...b.map(p => p.price));
     return maxPriceB - maxPriceA;
   });
-
-  // Build structure using Set and custom logic
-  const manufacturers = new Set<string>();
-  groceryData.forEach(g => manufacturers.add(g.brand));
-  const mfgArr = Array.from(manufacturers);
-  mfgArr.sort();
 
   // Create render data with prime-based coloring using clusters
   const renderStructure = sortedHorizontalClusters.map((clusterItems, clusterIdx) => {

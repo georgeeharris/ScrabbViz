@@ -298,6 +298,7 @@ function App() {
               const bgHue = struct.colorSeed;
               const bgColor = `hsl(${bgHue}, 65%, 88%)`;
               const isFirst = positionInVertical === 0;
+              const prevColorSeed = !isFirst ? renderStructure[verticalCluster[positionInVertical - 1]].colorSeed : 0;
               
               return (
                 <div key={horizontalClusterIdx}>
@@ -310,7 +311,7 @@ function App() {
                       <div style={{
                         width: '4px',
                         height: '30px',
-                        background: `linear-gradient(to bottom, hsl(${bgHue}, 60%, 60%), hsl(${renderStructure[verticalCluster[positionInVertical - 1]].colorSeed}, 60%, 60%))`,
+                        background: `linear-gradient(to bottom, hsl(${bgHue}, 60%, 60%), hsl(${prevColorSeed}, 60%, 60%))`,
                         borderRadius: '2px',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                       }} />

@@ -248,9 +248,10 @@ function App() {
 
   const verticalClusters = buildVerticalClusters();
 
-  // Build vertical connection map: maps product IDs to their connected product IDs in the next cluster
-  const buildVerticalConnectionMap = (): Map<string, string> => {
-    const connectionMap = new Map<string, string>();
+  // Build vertical connection map: maps product IDs to their connected product IDs
+  // Stores connections in both directions to support bidirectional lookup
+  const buildVerticalConnectionMap = (): Map<string, string[]> => {
+    const connectionMap = new Map<string, string[]>();
     
     // Map product IDs to their horizontal cluster index
     const productToClusterIdx = new Map<string, number>();
@@ -260,18 +261,23 @@ function App() {
       });
     });
     
-    // For each vertical pair, map source product to target product
+    // For each vertical pair, store bidirectional connections
     verticalPairs.forEach(([productA, productB]) => {
       const clusterIdxA = productToClusterIdx.get(productA);
       const clusterIdxB = productToClusterIdx.get(productB);
       
-      if (clusterIdxA !== undefined && clusterIdxB !== undefined) {
-        // Store connection in the direction that matters for layout
-        if (clusterIdxB > clusterIdxA) {
-          connectionMap.set(productA, productB);
-        } else {
-          connectionMap.set(productB, productA);
+      if (clusterIdxA !== undefined && clusterIdxB !== undefined && clusterIdxA !== clusterIdxB) {
+        // Store connection from A to B
+        if (!connectionMap.has(productA)) {
+          connectionMap.set(productA, []);
         }
+        connectionMap.get(productA)!.push(productB);
+        
+        // Store connection from B to A (bidirectional)
+        if (!connectionMap.has(productB)) {
+          connectionMap.set(productB, []);
+        }
+        connectionMap.get(productB)!.push(productA);
       }
     });
     
@@ -285,6 +291,9 @@ function App() {
   const CARD_GAP = 20; // Gap between cards in horizontal cluster
   const CONNECTOR_WIDTH = 40; // Width of horizontal connector line
   const MIN_VERTICAL_CONNECTOR_WIDTH = 3; // Minimum width for vertical connectors
+  const BASE_VERTICAL_CONNECTOR_HEIGHT = 30; // Base height for vertical connector
+  const VERTICAL_CONNECTOR_SPACING = 15; // Vertical spacing between multiple connectors (increased for better visibility)
+  const HORIZONTAL_CONNECTOR_OFFSET = 5; // Horizontal offset per connector to prevent overlap
 
   // Create render data with prime-based coloring using clusters
   const renderStructure = sortedHorizontalClusters.map((clusterItems, clusterIdx) => {
@@ -324,9 +333,9 @@ function App() {
         
         for (let j = 0; j < prevCluster.length; j++) {
           const sourceProduct = prevCluster[j];
-          const connectedProductId = verticalConnectionMap.get(sourceProduct.id);
+          const connectedProductIds = verticalConnectionMap.get(sourceProduct.id) || [];
           
-          if (connectedProductId) {
+          for (const connectedProductId of connectedProductIds) {
             const targetIdx = currentCluster.findIndex(p => p.id === connectedProductId);
             if (targetIdx !== -1) {
               sourceProductIdx = j;
@@ -334,6 +343,8 @@ function App() {
               break;
             }
           }
+          
+          if (sourceProductIdx !== -1) break;
         }
         
         // Calculate offset to align the connected cards
@@ -432,21 +443,29 @@ function App() {
               const offset = clusterOffsets.get(horizontalClusterIdx) || 0;
               
               // Calculate vertical connectors for this cluster
-              const connectors: Array<{fromIdx: number, toIdx: number}> = [];
+              // Look for connections to ANY cluster below this one in the vertical group, not just the next one
+              const connectors: Array<{fromIdx: number, toIdx: number, targetClusterIdx: number, clusterSpan: number}> = [];
               if (!isFirst) {
-                const prevClusterIdx = verticalCluster[positionInVertical - 1];
-                const prevCluster = sortedHorizontalClusters[prevClusterIdx];
+                const currentPosition = positionInVertical;
                 const currentCluster = sortedHorizontalClusters[horizontalClusterIdx];
                 
-                prevCluster.forEach((prevProduct, prevIdx) => {
-                  const connectedProductId = verticalConnectionMap.get(prevProduct.id);
-                  if (connectedProductId) {
-                    const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
-                    if (currentIdx !== -1) {
-                      connectors.push({ fromIdx: prevIdx, toIdx: currentIdx });
-                    }
-                  }
-                });
+                // Check all previous clusters in this vertical group
+                for (let prevPos = 0; prevPos < currentPosition; prevPos++) {
+                  const prevClusterIdx = verticalCluster[prevPos];
+                  const prevCluster = sortedHorizontalClusters[prevClusterIdx];
+                  
+                  prevCluster.forEach((prevProduct, prevIdx) => {
+                    const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
+                    connectedProductIds.forEach(connectedProductId => {
+                      const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
+                      if (currentIdx !== -1) {
+                        // clusterSpan tracks how many clusters this connector spans (reserved for future use)
+                        const clusterSpan = currentPosition - prevPos;
+                        connectors.push({ fromIdx: prevIdx, toIdx: currentIdx, targetClusterIdx: prevClusterIdx, clusterSpan });
+                      }
+                    });
+                  });
+                }
               }
               
               return (
@@ -454,23 +473,26 @@ function App() {
                   {!isFirst && connectors.length > 0 && (
                     <div style={{
                       position: 'relative',
-                      height: '30px',
+                      height: `${BASE_VERTICAL_CONNECTOR_HEIGHT + (connectors.length - 1) * VERTICAL_CONNECTOR_SPACING}px`,
                       marginLeft: `${Math.max(0, offset)}px`
                     }}>
                       {connectors.map((conn, connIdx) => {
-                        const prevOffset = clusterOffsets.get(verticalCluster[positionInVertical - 1]) || 0;
+                        const prevOffset = clusterOffsets.get(conn.targetClusterIdx) || 0;
                         const fromX = prevOffset - offset + conn.fromIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
                         const toX = conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
+                        
+                        // Add horizontal offset to separate overlapping connectors
+                        const horizontalOffset = connIdx * HORIZONTAL_CONNECTOR_OFFSET;
                         
                         return (
                           <div
                             key={connIdx}
                             style={{
                               position: 'absolute',
-                              left: `${Math.min(fromX, toX)}px`,
-                              top: '0',
+                              left: `${Math.min(fromX, toX) + horizontalOffset}px`,
+                              top: `${connIdx * VERTICAL_CONNECTOR_SPACING}px`,
                               width: `${Math.abs(fromX - toX) || MIN_VERTICAL_CONNECTOR_WIDTH}px`,
-                              height: '30px',
+                              height: `${BASE_VERTICAL_CONNECTOR_HEIGHT}px`,
                               background: 'black',
                               borderRadius: '2px'
                             }}

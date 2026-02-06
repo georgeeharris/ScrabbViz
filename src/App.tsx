@@ -36,6 +36,7 @@ const primeSequence = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
 
 function App() {
   const [hoverIdx, setHoverIdx] = useState<number>(-1);
+  const [viewMode, setViewMode] = useState<'html' | 'svg' | 'both'>('both');
 
   // Sample data with 3 separate super clusters
   const groceryData: TGrocery[] = [
@@ -365,7 +366,247 @@ function App() {
   
   const clusterOffsets = calculateClusterOffsets();
 
-  return (
+  // SVG rendering function
+  const renderSVG = () => {
+    const SVG_WIDTH = 1600;
+    const SVG_PADDING = 60;
+    const SUPER_CLUSTER_SPACING = 200;
+    const CLUSTER_VERTICAL_SPACING = 80;
+    let currentY = 80;
+    let svgGlobalIdx = 0;
+
+    const elements: React.JSX.Element[] = [];
+    
+    // Title and legend
+    elements.push(
+      <text key="title" x={SVG_WIDTH / 2} y="40" textAnchor="middle" fontSize="48" fontWeight="900" fill="#1a1a2e">
+        Grocery Product Relationship Grid (SVG)
+      </text>
+    );
+    
+    elements.push(
+      <rect key="legend1-bg" x={SVG_WIDTH / 2 - 250} y="60" width="240" height="40" rx="20" fill="hsl(210, 70%, 50%)" />
+    );
+    elements.push(
+      <text key="legend1" x={SVG_WIDTH / 2 - 130} y="85" textAnchor="middle" fontSize="17" fontWeight="700" fill="white">
+        ⟷ Horizontal: Product Relationships
+      </text>
+    );
+    
+    elements.push(
+      <rect key="legend2-bg" x={SVG_WIDTH / 2 + 10} y="60" width="240" height="40" rx="20" fill="hsl(340, 70%, 50%)" />
+    );
+    elements.push(
+      <text key="legend2" x={SVG_WIDTH / 2 + 130} y="85" textAnchor="middle" fontSize="17" fontWeight="700" fill="white">
+        ↕ Vertical: Cluster Organization
+      </text>
+    );
+    
+    currentY = 140;
+
+    verticalClusters.forEach((verticalCluster, verticalIdx) => {
+      // Super cluster label
+      elements.push(
+        <rect 
+          key={`sc-label-bg-${verticalIdx}`}
+          x={SVG_PADDING}
+          y={currentY}
+          width="250"
+          height="45"
+          rx="8"
+          fill="rgba(255,255,255,0.8)"
+          stroke="rgba(0,0,0,0.1)"
+          strokeWidth="1"
+        />
+      );
+      elements.push(
+        <text 
+          key={`sc-label-${verticalIdx}`}
+          x={SVG_PADDING + 125}
+          y={currentY + 28}
+          textAnchor="middle"
+          fontSize="24"
+          fontWeight="800"
+          fill="#1a1a2e"
+        >
+          Super Cluster {verticalIdx + 1}
+        </text>
+      );
+      
+      currentY += 70;
+      
+      const clusterStartY = currentY;
+      
+      verticalCluster.forEach((horizontalClusterIdx, positionInVertical) => {
+        const struct = renderStructure[horizontalClusterIdx];
+        const bgHue = struct.colorSeed;
+        const offset = clusterOffsets.get(horizontalClusterIdx) || 0;
+        const isFirst = positionInVertical === 0;
+        
+        // Calculate vertical connectors
+        const connectors: Array<{fromIdx: number, toIdx: number, targetClusterIdx: number, clusterSpan: number, fromY: number}> = [];
+        if (!isFirst) {
+          const currentPosition = positionInVertical;
+          const currentCluster = sortedHorizontalClusters[horizontalClusterIdx];
+          
+          for (let prevPos = 0; prevPos < currentPosition; prevPos++) {
+            const prevClusterIdx = verticalCluster[prevPos];
+            const prevCluster = sortedHorizontalClusters[prevClusterIdx];
+            
+            // Find the Y position of the previous cluster
+            let prevClusterY = clusterStartY;
+            for (let i = 0; i < prevPos; i++) {
+              prevClusterY += CLUSTER_VERTICAL_SPACING + BASE_VERTICAL_CONNECTOR_HEIGHT + 
+                             (connectors.filter(c => c.targetClusterIdx === verticalCluster[i]).length - 1) * VERTICAL_CONNECTOR_SPACING;
+            }
+            
+            prevCluster.forEach((prevProduct, prevIdx) => {
+              const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
+              connectedProductIds.forEach(connectedProductId => {
+                const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
+                if (currentIdx !== -1) {
+                  const clusterSpan = currentPosition - prevPos;
+                  connectors.push({ 
+                    fromIdx: prevIdx, 
+                    toIdx: currentIdx, 
+                    targetClusterIdx: prevClusterIdx, 
+                    clusterSpan,
+                    fromY: prevClusterY + 50 // Center of previous card
+                  });
+                }
+              });
+            });
+          }
+        }
+        
+        // Draw vertical connectors
+        if (!isFirst && connectors.length > 0) {
+          connectors.forEach((conn, connIdx) => {
+            const prevOffset = clusterOffsets.get(conn.targetClusterIdx) || 0;
+            const fromX = SVG_PADDING + Math.max(0, prevOffset) + prevOffset + conn.fromIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
+            const toX = SVG_PADDING + Math.max(0, offset) + conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
+            const horizontalOffset = connIdx * HORIZONTAL_CONNECTOR_OFFSET;
+            
+            elements.push(
+              <line
+                key={`vconn-${horizontalClusterIdx}-${connIdx}`}
+                x1={fromX + horizontalOffset}
+                y1={conn.fromY}
+                x2={toX + horizontalOffset}
+                y2={currentY}
+                stroke="black"
+                strokeWidth="3"
+              />
+            );
+          });
+          
+          currentY += BASE_VERTICAL_CONNECTOR_HEIGHT + (connectors.length - 1) * VERTICAL_CONNECTOR_SPACING;
+        }
+        
+        // Draw cluster products
+        struct.itemsForMfg.forEach((itm, itmIdx) => {
+          const cardX = SVG_PADDING + Math.max(0, offset) + itmIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH);
+          const cardY = currentY;
+          const bgColor = `hsl(${bgHue}, 65%, 88%)`;
+          const borderColor = `hsl(${bgHue}, 70%, 45%)`;
+          const cardIdx = svgGlobalIdx++;
+          const isHovered = hoverIdx === cardIdx;
+          
+          // Card background
+          elements.push(
+            <rect
+              key={`card-bg-${cardIdx}`}
+              x={cardX}
+              y={cardY}
+              width={CARD_WIDTH}
+              height={60}
+              rx="10"
+              fill={bgColor}
+              stroke={isHovered ? borderColor : "#d1d5db"}
+              strokeWidth={isHovered ? "3" : "2"}
+              style={{ 
+                cursor: 'pointer',
+                filter: isHovered ? `drop-shadow(0 8px 12px ${borderColor}40)` : 'drop-shadow(0 2px 4px rgba(0,0,0,0.08))',
+                transition: 'all 0.25s'
+              }}
+              onMouseEnter={() => setHoverIdx(cardIdx)}
+              onMouseLeave={() => setHoverIdx(-1)}
+            />
+          );
+          
+          // Card text
+          elements.push(
+            <text
+              key={`card-text-${cardIdx}`}
+              x={cardX + CARD_WIDTH / 2}
+              y={cardY + 35}
+              textAnchor="middle"
+              fontSize="14"
+              fontWeight="600"
+              fill="#1f2937"
+              pointerEvents="none"
+            >
+              {itm.product} (${itm.price.toFixed(2)})
+            </text>
+          );
+          
+          // Horizontal connector
+          if (itmIdx < struct.itemsForMfg.length - 1) {
+            elements.push(
+              <line
+                key={`hconn-${cardIdx}`}
+                x1={cardX + CARD_WIDTH}
+                y1={cardY + 30}
+                x2={cardX + CARD_WIDTH + CARD_GAP}
+                y2={cardY + 30}
+                stroke="black"
+                strokeWidth="3"
+              />
+            );
+          }
+        });
+        
+        currentY += 80 + CLUSTER_VERTICAL_SPACING;
+      });
+      
+      // Add spacing between super clusters
+      if (verticalIdx < verticalClusters.length - 1) {
+        // Dashed border line
+        elements.push(
+          <line
+            key={`sc-border-${verticalIdx}`}
+            x1={SVG_PADDING}
+            y1={currentY - 40}
+            x2={SVG_WIDTH - SVG_PADDING}
+            y2={currentY - 40}
+            stroke="rgba(0,0,0,0.15)"
+            strokeWidth="3"
+            strokeDasharray="8,4"
+          />
+        );
+        currentY += SUPER_CLUSTER_SPACING - 40;
+      }
+    });
+    
+    const totalHeight = currentY + 80;
+    
+    return (
+      <svg 
+        width={SVG_WIDTH} 
+        height={totalHeight}
+        style={{
+          background: `linear-gradient(117deg, #${Math.abs(Math.sin(0.5) * 16777215).toString(16).substring(0,6)} 0%, #${Math.abs(Math.cos(0.7) * 16777215).toString(16).substring(0,6)} 100%)`,
+          border: '1px solid #ccc',
+          borderRadius: '8px'
+        }}
+      >
+        {elements}
+      </svg>
+    );
+  };
+
+  // HTML rendering function (existing code wrapped)
+  const renderHTML = () => (
     <div style={{ 
       width: '100%', 
       minHeight: '100vh', 
@@ -577,6 +818,98 @@ function App() {
           </div>
         ))}
       </div>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* View mode toggle */}
+      <div style={{
+        position: 'fixed',
+        top: '20px',
+        right: '20px',
+        zIndex: 1000,
+        display: 'flex',
+        gap: '10px',
+        background: 'white',
+        padding: '10px',
+        borderRadius: '8px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+      }}>
+        <button
+          onClick={() => setViewMode('html')}
+          style={{
+            padding: '8px 16px',
+            background: viewMode === 'html' ? '#4f46e5' : '#e5e7eb',
+            color: viewMode === 'html' ? 'white' : '#374151',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 600,
+            fontSize: '14px'
+          }}
+        >
+          HTML
+        </button>
+        <button
+          onClick={() => setViewMode('svg')}
+          style={{
+            padding: '8px 16px',
+            background: viewMode === 'svg' ? '#4f46e5' : '#e5e7eb',
+            color: viewMode === 'svg' ? 'white' : '#374151',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 600,
+            fontSize: '14px'
+          }}
+        >
+          SVG
+        </button>
+        <button
+          onClick={() => setViewMode('both')}
+          style={{
+            padding: '8px 16px',
+            background: viewMode === 'both' ? '#4f46e5' : '#e5e7eb',
+            color: viewMode === 'both' ? 'white' : '#374151',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 600,
+            fontSize: '14px'
+          }}
+        >
+          Both
+        </button>
+      </div>
+
+      {/* Render based on view mode */}
+      {viewMode === 'html' && renderHTML()}
+      {viewMode === 'svg' && (
+        <div style={{ 
+          padding: '20px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '100vh'
+        }}>
+          {renderSVG()}
+        </div>
+      )}
+      {viewMode === 'both' && (
+        <div style={{ padding: '20px' }}>
+          <div style={{ marginBottom: '40px' }}>
+            <h2 style={{ textAlign: 'center', fontSize: '32px', fontWeight: 'bold', marginBottom: '20px' }}>HTML Version</h2>
+            {renderHTML()}
+          </div>
+          <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'center' }}>
+            <div>
+              <h2 style={{ textAlign: 'center', fontSize: '32px', fontWeight: 'bold', marginBottom: '20px' }}>SVG Version</h2>
+              {renderSVG()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

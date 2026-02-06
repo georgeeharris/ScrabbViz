@@ -248,9 +248,10 @@ function App() {
 
   const verticalClusters = buildVerticalClusters();
 
-  // Build vertical connection map: maps product IDs to their connected product IDs in the next cluster
-  const buildVerticalConnectionMap = (): Map<string, string> => {
-    const connectionMap = new Map<string, string>();
+  // Build vertical connection map: maps product IDs to their connected product IDs
+  // Stores connections in both directions to support bidirectional lookup
+  const buildVerticalConnectionMap = (): Map<string, string[]> => {
+    const connectionMap = new Map<string, string[]>();
     
     // Map product IDs to their horizontal cluster index
     const productToClusterIdx = new Map<string, number>();
@@ -260,18 +261,23 @@ function App() {
       });
     });
     
-    // For each vertical pair, map source product to target product
+    // For each vertical pair, store bidirectional connections
     verticalPairs.forEach(([productA, productB]) => {
       const clusterIdxA = productToClusterIdx.get(productA);
       const clusterIdxB = productToClusterIdx.get(productB);
       
-      if (clusterIdxA !== undefined && clusterIdxB !== undefined) {
-        // Store connection in the direction that matters for layout
-        if (clusterIdxB > clusterIdxA) {
-          connectionMap.set(productA, productB);
-        } else {
-          connectionMap.set(productB, productA);
+      if (clusterIdxA !== undefined && clusterIdxB !== undefined && clusterIdxA !== clusterIdxB) {
+        // Store connection from A to B
+        if (!connectionMap.has(productA)) {
+          connectionMap.set(productA, []);
         }
+        connectionMap.get(productA)!.push(productB);
+        
+        // Store connection from B to A (bidirectional)
+        if (!connectionMap.has(productB)) {
+          connectionMap.set(productB, []);
+        }
+        connectionMap.get(productB)!.push(productA);
       }
     });
     
@@ -326,9 +332,9 @@ function App() {
         
         for (let j = 0; j < prevCluster.length; j++) {
           const sourceProduct = prevCluster[j];
-          const connectedProductId = verticalConnectionMap.get(sourceProduct.id);
+          const connectedProductIds = verticalConnectionMap.get(sourceProduct.id) || [];
           
-          if (connectedProductId) {
+          for (const connectedProductId of connectedProductIds) {
             const targetIdx = currentCluster.findIndex(p => p.id === connectedProductId);
             if (targetIdx !== -1) {
               sourceProductIdx = j;
@@ -336,6 +342,8 @@ function App() {
               break;
             }
           }
+          
+          if (sourceProductIdx !== -1) break;
         }
         
         // Calculate offset to align the connected cards
@@ -434,21 +442,28 @@ function App() {
               const offset = clusterOffsets.get(horizontalClusterIdx) || 0;
               
               // Calculate vertical connectors for this cluster
-              const connectors: Array<{fromIdx: number, toIdx: number}> = [];
+              // Look for connections to ANY cluster below this one in the vertical group, not just the next one
+              const connectors: Array<{fromIdx: number, toIdx: number, targetClusterIdx: number, clusterSpan: number}> = [];
               if (!isFirst) {
-                const prevClusterIdx = verticalCluster[positionInVertical - 1];
-                const prevCluster = sortedHorizontalClusters[prevClusterIdx];
+                const currentPosition = positionInVertical;
                 const currentCluster = sortedHorizontalClusters[horizontalClusterIdx];
                 
-                prevCluster.forEach((prevProduct, prevIdx) => {
-                  const connectedProductId = verticalConnectionMap.get(prevProduct.id);
-                  if (connectedProductId) {
-                    const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
-                    if (currentIdx !== -1) {
-                      connectors.push({ fromIdx: prevIdx, toIdx: currentIdx });
-                    }
-                  }
-                });
+                // Check all previous clusters in this vertical group
+                for (let prevPos = 0; prevPos < currentPosition; prevPos++) {
+                  const prevClusterIdx = verticalCluster[prevPos];
+                  const prevCluster = sortedHorizontalClusters[prevClusterIdx];
+                  
+                  prevCluster.forEach((prevProduct, prevIdx) => {
+                    const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
+                    connectedProductIds.forEach(connectedProductId => {
+                      const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
+                      if (currentIdx !== -1) {
+                        const clusterSpan = currentPosition - prevPos;
+                        connectors.push({ fromIdx: prevIdx, toIdx: currentIdx, targetClusterIdx: prevClusterIdx, clusterSpan });
+                      }
+                    });
+                  });
+                }
               }
               
               return (
@@ -460,7 +475,7 @@ function App() {
                       marginLeft: `${Math.max(0, offset)}px`
                     }}>
                       {connectors.map((conn, connIdx) => {
-                        const prevOffset = clusterOffsets.get(verticalCluster[positionInVertical - 1]) || 0;
+                        const prevOffset = clusterOffsets.get(conn.targetClusterIdx) || 0;
                         const fromX = prevOffset - offset + conn.fromIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
                         const toX = conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
                         

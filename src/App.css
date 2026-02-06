@@ -47,6 +47,7 @@
 }
 
 .product-card:hover {
+  stroke: var(--border-color, #666) !important;
   stroke-width: 3 !important;
   filter: drop-shadow(0 8px 12px rgba(0,0,0,0.2)) !important;
 }

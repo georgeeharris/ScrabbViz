@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import './App.css'
 
 // Performance timing utility
@@ -449,7 +449,9 @@ function App() {
     });
     
     const duration = profiler.end('calculateClusterOffsets');
-    console.log(`Offset calculation took: ${duration.toFixed(2)}ms`);
+    if (import.meta.env.DEV) {
+      console.log(`Offset calculation took: ${duration.toFixed(2)}ms`);
+    }
     
     return offsets;
   }, [sortedHorizontalClusters, verticalClusters, verticalConnectionMap]);
@@ -627,10 +629,11 @@ function App() {
               stroke={"#d1d5db"}
               strokeWidth={"2"}
               className="product-card"
-              data-border-color={borderColor}
               style={{ 
                 cursor: 'pointer',
-                transition: 'all 0.25s'
+                transition: 'all 0.25s',
+                // @ts-ignore - CSS custom property
+                '--border-color': borderColor
               }}
             />
           );
@@ -697,25 +700,35 @@ function App() {
     const renderTime = profiler.end('renderSVG');
     const allTimings = profiler.getTimings();
     
-    // Store timing for overlay display
-    setTimeout(() => setLastRenderTime(allTimings), 0);
+    if (import.meta.env.DEV) {
+      console.log(`SVG render took: ${renderTime.toFixed(2)}ms`);
+    }
     
-    console.log(`SVG render took: ${renderTime.toFixed(2)}ms`);
-    
-    return (
-      <svg 
-        width={SVG_WIDTH} 
-        height={totalHeight}
-        style={{
-          background: `linear-gradient(117deg, #${Math.abs(Math.sin(0.5) * 16777215).toString(16).substring(0,6).padStart(6, '0')} 0%, #${Math.abs(Math.cos(0.7) * 16777215).toString(16).substring(0,6).padStart(6, '0')} 100%)`,
-          border: '1px solid #ccc',
-          borderRadius: '8px'
-        }}
-      >
-        {elements}
-      </svg>
-    );
+    return {
+      svg: (
+        <svg 
+          width={SVG_WIDTH} 
+          height={totalHeight}
+          style={{
+            background: `linear-gradient(117deg, #${Math.abs(Math.sin(0.5) * 16777215).toString(16).substring(0,6).padStart(6, '0')} 0%, #${Math.abs(Math.cos(0.7) * 16777215).toString(16).substring(0,6).padStart(6, '0')} 100%)`,
+            border: '1px solid #ccc',
+            borderRadius: '8px'
+          }}
+        >
+          {elements}
+        </svg>
+      ),
+      timings: allTimings
+    };
   }, [sortedHorizontalClusters, verticalClusters, clusterOffsets, verticalConnectionMap, renderStructure, productPositionIndex]);
+
+  // Update timing display when render completes - using useEffect
+  const { svg: svgElement, timings } = svgContent;
+  useEffect(() => {
+    if (timings && timings.length > 0) {
+      setLastRenderTime(timings);
+    }
+  }, [timings]);
 
   // Calculate total product count
   const totalProducts = groceryData.length;
@@ -807,7 +820,7 @@ function App() {
       )}
 
       {/* Main SVG Content */}
-      {svgContent}
+      {svgElement}
     </div>
   );
 }

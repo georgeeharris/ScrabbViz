@@ -37,33 +37,65 @@ const primeSequence = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
 function App() {
   const [hoverIdx, setHoverIdx] = useState<number>(-1);
 
-  // Sample data
+  // Sample data with 3 separate super clusters
   const groceryData: TGrocery[] = [
-    { id: "A", product: "Organic Milk", price: 4.99, packSize: "1 gallon", brand: "Happy Farms" },
-    { id: "B", product: "Milk Half Gallon", price: 2.79, packSize: "0.5 gallon", brand: "Happy Farms" },
-    { id: "C", product: "Milk Quart", price: 1.49, packSize: "32 oz", brand: "Happy Farms" },
-    { id: "D", product: "Whole Grain Bread", price: 3.49, packSize: "24 oz", brand: "Baker's Choice" },
-    { id: "E", product: "Sandwich Bread", price: 2.29, packSize: "16 oz", brand: "Baker's Choice" },
-    { id: "F", product: "Orange Juice Large", price: 5.99, packSize: "64 oz", brand: "Citrus Grove" },
-    { id: "G", product: "Orange Juice Small", price: 3.49, packSize: "32 oz", brand: "Citrus Grove" },
-    { id: "H", product: "Cereal Family Size", price: 6.49, packSize: "20 oz", brand: "Morning Crunch" },
-    { id: "I", product: "Cereal Regular", price: 4.29, packSize: "12 oz", brand: "Morning Crunch" }
+    // Super Cluster 1: White Sliced Bread
+    { id: "A", product: "Hovis White 800g", price: 1.35, packSize: "800g", brand: "Hovis" },
+    { id: "B", product: "Hovis White 400g", price: 0.85, packSize: "400g", brand: "Hovis" },
+    { id: "C", product: "Tesco White 800g", price: 1.10, packSize: "800g", brand: "Tesco" },
+    { id: "D", product: "Tesco White 400g", price: 0.65, packSize: "400g", brand: "Tesco" },
+    { id: "E", product: "Allinson White 800g", price: 1.45, packSize: "800g", brand: "Allinson" },
+    { id: "F", product: "Allinson White 400g", price: 0.95, packSize: "400g", brand: "Allinson" },
+    
+    // Super Cluster 2: Wholemeal Bread
+    { id: "G", product: "Hovis Wholemeal 800g", price: 1.55, packSize: "800g", brand: "Hovis" },
+    { id: "H", product: "Hovis Wholemeal 400g", price: 0.95, packSize: "400g", brand: "Hovis" },
+    { id: "I", product: "Tesco Wholemeal 800g", price: 1.25, packSize: "800g", brand: "Tesco" },
+    { id: "J", product: "Tesco Wholemeal 400g", price: 0.75, packSize: "400g", brand: "Tesco" },
+    { id: "K", product: "Allinson Wholemeal 800g", price: 1.65, packSize: "800g", brand: "Allinson" },
+    { id: "L", product: "Allinson Wholemeal 400g", price: 1.05, packSize: "400g", brand: "Allinson" },
+    
+    // Super Cluster 3: Dairy Products
+    { id: "M", product: "Organic Milk 2L", price: 2.50, packSize: "2 liters", brand: "Organic Valley" },
+    { id: "N", product: "Organic Milk 1L", price: 1.45, packSize: "1 liter", brand: "Organic Valley" },
+    { id: "O", product: "Cheddar Cheese 400g", price: 3.99, packSize: "400g", brand: "Cathedral City" },
+    { id: "P", product: "Cheddar Cheese 200g", price: 2.20, packSize: "200g", brand: "Cathedral City" },
+    { id: "Q", product: "Greek Yogurt 500g", price: 2.75, packSize: "500g", brand: "Fage" },
+    { id: "R", product: "Greek Yogurt 170g", price: 1.20, packSize: "170g", brand: "Fage" }
   ];
 
   // Relationship pairs - these define which products are related
   const horizontalPairs: TProductPair[] = [
-    ["C", "B"], ["B", "A"], // Milk progression by size
-    ["E", "D"], // Bread progression
-    ["G", "F"], // OJ progression
-    ["I", "H"]  // Cereal progression
+    // Super Cluster 1: White Bread - horizontal clusters by brand
+    ["B", "A"], // Hovis white bread by size
+    ["D", "C"], // Tesco white bread by size
+    ["F", "E"], // Allinson white bread by size
+    
+    // Super Cluster 2: Wholemeal Bread - horizontal clusters by brand
+    ["H", "G"], // Hovis wholemeal bread by size
+    ["J", "I"], // Tesco wholemeal bread by size
+    ["L", "K"], // Allinson wholemeal bread by size
+    
+    // Super Cluster 3: Dairy Products - horizontal clusters by product type
+    ["N", "M"], // Organic milk by size
+    ["P", "O"], // Cheddar cheese by size
+    ["R", "Q"]  // Greek yogurt by size
   ];
 
   // Vertical pairs define cross-cluster relationships
-  // Currently reserved for future vertical organization features
+  // Vertical pairs within each super cluster connect related products between brands/types
   const verticalPairs: TProductPair[] = [
-    ["A", "D"], // Milk to Bread
-    ["D", "F"], // Bread to OJ
-    ["F", "H"]  // OJ to Cereal
+    // Super Cluster 1: White Bread - vertical connections between brands (800g products)
+    ["A", "C"], // Hovis 800g to Tesco 800g
+    ["C", "E"], // Tesco 800g to Allinson 800g
+    
+    // Super Cluster 2: Wholemeal Bread - vertical connections between brands (800g products)
+    ["G", "I"], // Hovis 800g to Tesco 800g
+    ["I", "K"], // Tesco 800g to Allinson 800g
+    
+    // Super Cluster 3: Dairy Products - vertical connections between product types
+    ["M", "O"], // Milk to Cheese
+    ["O", "Q"]  // Cheese to Yogurt
   ];
 
   // Build clusters from pairs
@@ -369,13 +401,29 @@ function App() {
           <div 
             key={verticalIdx}
             style={{
-              marginBottom: '60px',
+              marginBottom: '120px', // Increased spacing between super clusters
               position: 'relative',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'flex-start'
+              alignItems: 'flex-start',
+              paddingBottom: verticalIdx < verticalClusters.length - 1 ? '40px' : '0',
+              borderBottom: verticalIdx < verticalClusters.length - 1 ? '3px dashed rgba(0,0,0,0.15)' : 'none'
             }}
           >
+            {/* Super Cluster Label */}
+            <div style={{
+              fontSize: '24px',
+              fontWeight: 800,
+              color: '#1a1a2e',
+              marginBottom: '30px',
+              padding: '10px 20px',
+              background: 'rgba(255,255,255,0.8)',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            }}>
+              Super Cluster {verticalIdx + 1}
+            </div>
+            
             {verticalCluster.map((horizontalClusterIdx, positionInVertical) => {
               const struct = renderStructure[horizontalClusterIdx];
               const bgHue = struct.colorSeed;

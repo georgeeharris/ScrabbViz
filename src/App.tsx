@@ -34,18 +34,6 @@ class UnionFind {
 // Prime number generator for unique color hashing
 const primeSequence = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
 
-// Fibonacci generator for spacing
-const fibSpacing = (n: number) => {
-  if (n <= 1) return 140;
-  let a = 140, b = 160;
-  for (let i = 2; i <= n; i++) {
-    const temp = a + b;
-    a = b;
-    b = temp > 250 ? 250 : temp;
-  }
-  return b;
-};
-
 function App() {
   const [hoverIdx, setHoverIdx] = useState<number>(-1);
 
@@ -228,6 +216,38 @@ function App() {
 
   const verticalClusters = buildVerticalClusters();
 
+  // Build vertical connection map: maps product IDs to their connected product IDs in the next cluster
+  const buildVerticalConnectionMap = (): Map<string, string> => {
+    const connectionMap = new Map<string, string>();
+    
+    // Map product IDs to their horizontal cluster index
+    const productToClusterIdx = new Map<string, number>();
+    sortedHorizontalClusters.forEach((cluster, idx) => {
+      cluster.forEach(product => {
+        productToClusterIdx.set(product.id, idx);
+      });
+    });
+    
+    // For each vertical pair, map source product to target product
+    verticalPairs.forEach(([productA, productB]) => {
+      const clusterIdxA = productToClusterIdx.get(productA);
+      const clusterIdxB = productToClusterIdx.get(productB);
+      
+      if (clusterIdxA !== undefined && clusterIdxB !== undefined) {
+        // Store connection in the direction that matters for layout
+        if (clusterIdxB > clusterIdxA) {
+          connectionMap.set(productA, productB);
+        } else {
+          connectionMap.set(productB, productA);
+        }
+      }
+    });
+    
+    return connectionMap;
+  };
+  
+  const verticalConnectionMap = buildVerticalConnectionMap();
+
   // Create render data with prime-based coloring using clusters
   const renderStructure = sortedHorizontalClusters.map((clusterItems, clusterIdx) => {
     // Use cluster index for label
@@ -241,6 +261,63 @@ function App() {
   });
 
   let globalIdx = 0;
+
+  // Calculate horizontal offsets for each cluster based on vertical connections
+  const calculateClusterOffsets = (): Map<number, number> => {
+    const offsets = new Map<number, number>();
+    const CARD_WIDTH = 200; // Approximate card width with padding
+    const CARD_GAP = 20; // Gap between cards
+    const CONNECTOR_WIDTH = 40; // Width of horizontal connector
+    
+    verticalClusters.forEach(verticalCluster => {
+      if (verticalCluster.length === 0) return;
+      
+      // First cluster in vertical group has offset 0
+      offsets.set(verticalCluster[0], 0);
+      
+      // For each subsequent cluster, calculate offset based on first vertical connection
+      for (let i = 1; i < verticalCluster.length; i++) {
+        const currentClusterIdx = verticalCluster[i];
+        const prevClusterIdx = verticalCluster[i - 1];
+        
+        const currentCluster = sortedHorizontalClusters[currentClusterIdx];
+        const prevCluster = sortedHorizontalClusters[prevClusterIdx];
+        
+        // Find the first vertical connection from prev cluster to current cluster
+        let sourceProductIdx = -1;
+        let targetProductIdx = -1;
+        
+        for (let j = 0; j < prevCluster.length; j++) {
+          const sourceProduct = prevCluster[j];
+          const connectedProductId = verticalConnectionMap.get(sourceProduct.id);
+          
+          if (connectedProductId) {
+            const targetIdx = currentCluster.findIndex(p => p.id === connectedProductId);
+            if (targetIdx !== -1) {
+              sourceProductIdx = j;
+              targetProductIdx = targetIdx;
+              break;
+            }
+          }
+        }
+        
+        // Calculate offset to align the connected cards
+        if (sourceProductIdx !== -1 && targetProductIdx !== -1) {
+          const prevOffset = offsets.get(prevClusterIdx) || 0;
+          const sourceCardOffset = prevOffset + sourceProductIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH);
+          const targetCardOffset = targetProductIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH);
+          offsets.set(currentClusterIdx, sourceCardOffset - targetCardOffset);
+        } else {
+          // No connection found, use same offset as previous cluster
+          offsets.set(currentClusterIdx, offsets.get(prevClusterIdx) || 0);
+        }
+      }
+    });
+    
+    return offsets;
+  };
+  
+  const clusterOffsets = calculateClusterOffsets();
 
   return (
     <div style={{ 
@@ -290,7 +367,10 @@ function App() {
             key={verticalIdx}
             style={{
               marginBottom: '60px',
-              position: 'relative'
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start'
             }}
           >
             {verticalCluster.map((horizontalClusterIdx, positionInVertical) => {
@@ -298,131 +378,108 @@ function App() {
               const bgHue = struct.colorSeed;
               const bgColor = `hsl(${bgHue}, 65%, 88%)`;
               const isFirst = positionInVertical === 0;
+              const offset = clusterOffsets.get(horizontalClusterIdx) || 0;
+              
+              // Calculate vertical connectors for this cluster
+              const connectors: Array<{fromIdx: number, toIdx: number}> = [];
+              if (!isFirst) {
+                const prevClusterIdx = verticalCluster[positionInVertical - 1];
+                const prevCluster = sortedHorizontalClusters[prevClusterIdx];
+                const currentCluster = sortedHorizontalClusters[horizontalClusterIdx];
+                
+                prevCluster.forEach((prevProduct, prevIdx) => {
+                  const connectedProductId = verticalConnectionMap.get(prevProduct.id);
+                  if (connectedProductId) {
+                    const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
+                    if (currentIdx !== -1) {
+                      connectors.push({ fromIdx: prevIdx, toIdx: currentIdx });
+                    }
+                  }
+                });
+              }
               
               return (
-                <div key={horizontalClusterIdx}>
-                  {!isFirst && (
+                <div key={horizontalClusterIdx} style={{ width: '100%' }}>
+                  {!isFirst && connectors.length > 0 && (
                     <div style={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      margin: '15px 0'
+                      position: 'relative',
+                      height: '30px',
+                      marginLeft: `${Math.max(0, offset)}px`
                     }}>
-                      <div style={{
-                        width: '4px',
-                        height: '30px',
-                        background: 'black',
-                        borderRadius: '2px'
-                      }} />
+                      {connectors.map((conn, connIdx) => {
+                        const CARD_WIDTH = 200;
+                        const CARD_GAP = 20;
+                        const CONNECTOR_WIDTH = 40;
+                        const prevOffset = clusterOffsets.get(verticalCluster[positionInVertical - 1]) || 0;
+                        const fromX = prevOffset - offset + conn.fromIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
+                        const toX = conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
+                        
+                        return (
+                          <div
+                            key={connIdx}
+                            style={{
+                              position: 'absolute',
+                              left: `${Math.min(fromX, toX)}px`,
+                              top: '0',
+                              width: `${Math.abs(fromX - toX) || 3}px`,
+                              height: '30px',
+                              background: 'black',
+                              borderRadius: '2px'
+                            }}
+                          />
+                        );
+                      })}
                     </div>
                   )}
                   
                   <div 
                     style={{
                       marginBottom: '0px',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center'
+                      marginLeft: `${Math.max(0, offset)}px`
                     }}
                   >
                     <div style={{
                       display: 'flex',
-                      gap: 0,
+                      gap: '20px',
                       alignItems: 'center',
                       flexWrap: 'nowrap'
                     }}>
                       {struct.itemsForMfg.map((itm, itmIdx) => {
                         const isNotLast = itmIdx < struct.itemsForMfg.length - 1;
-                        const CONNECTOR_OVERLAP = 20; // Overlap with adjacent cards
                         return (
                           <div key={itmIdx} style={{ display: 'flex', alignItems: 'center' }}>
                             {(() => {
                               const cardIdx = globalIdx++;
                               const isHovered = hoverIdx === cardIdx;
-                              const cardW = fibSpacing(itmIdx);
                               
                               return (
                                 <div
                                   onMouseEnter={() => setHoverIdx(cardIdx)}
                                   onMouseLeave={() => setHoverIdx(-1)}
                                   style={{
-                                    width: `${cardW}px`,
-                                    minWidth: `${cardW}px`,
-                                    padding: '26px',
+                                    padding: '12px 20px',
                                     background: isHovered 
                                       ? `linear-gradient(${145 + itmIdx * 15}deg, ${bgColor}, white)` 
                                       : `linear-gradient(180deg, ${bgColor}, #fafafa)`,
                                     border: isHovered 
-                                      ? `4px solid hsl(${bgHue}, 70%, 45%)` 
-                                      : '3px solid #d1d5db',
-                                    borderRadius: '17px',
+                                      ? `3px solid hsl(${bgHue}, 70%, 45%)` 
+                                      : '2px solid #d1d5db',
+                                    borderRadius: '10px',
                                     cursor: 'pointer',
-                                    transform: isHovered ? 'translateY(-14px) scale(1.07)' : 'translateY(0) scale(1)',
-                                    transition: 'all 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    transform: isHovered ? 'translateY(-8px) scale(1.05)' : 'translateY(0) scale(1)',
+                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                                     boxShadow: isHovered 
-                                      ? `0 22px 45px hsla(${bgHue}, 70%, 45%, 0.35)` 
-                                      : '0 4px 12px rgba(0,0,0,0.08)',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '16px',
+                                      ? `0 12px 24px hsla(${bgHue}, 70%, 45%, 0.3)` 
+                                      : '0 2px 8px rgba(0,0,0,0.08)',
                                     position: 'relative',
-                                    zIndex: isHovered ? 20 : 1
+                                    zIndex: isHovered ? 20 : 1,
+                                    fontSize: '14px',
+                                    fontWeight: 600,
+                                    color: '#1f2937',
+                                    whiteSpace: 'nowrap'
                                   }}
                                 >
-                                  <div style={{
-                                    position: 'absolute',
-                                    top: '11px',
-                                    right: '11px',
-                                    width: '34px',
-                                    height: '34px',
-                                    borderRadius: '50%',
-                                    background: `hsl(${bgHue}, 70%, 50%)`,
-                                    color: 'white',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '14px',
-                                    fontWeight: 800,
-                                    boxShadow: '0 3px 8px rgba(0,0,0,0.15)'
-                                  }}>
-                                    {itmIdx + 1}
-                                  </div>
-
-                                  <div style={{
-                                    fontSize: '15px',
-                                    fontWeight: 700,
-                                    color: '#1f2937',
-                                    lineHeight: '1.4',
-                                    marginTop: '24px',
-                                    minHeight: '42px'
-                                  }}>
-                                    {itm.product}
-                                  </div>
-
-                                  <div style={{
-                                    padding: '12px 18px',
-                                    background: 'rgba(255,255,255,0.92)',
-                                    borderRadius: '12px',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    color: '#4b5563',
-                                    textAlign: 'center',
-                                    border: '2px solid rgba(0,0,0,0.06)'
-                                  }}>
-                                    {itm.packSize}
-                                  </div>
-
-                                  <div style={{
-                                    padding: '15px',
-                                    background: `linear-gradient(135deg, hsl(${150}, 60%, 45%), hsl(${180}, 60%, 45%))`,
-                                    borderRadius: '13px',
-                                    fontSize: '24px',
-                                    fontWeight: 900,
-                                    color: 'white',
-                                    textAlign: 'center',
-                                    boxShadow: '0 5px 15px rgba(0,0,0,0.15)'
-                                  }}>
-                                    ${itm.price.toFixed(2)}
-                                  </div>
+                                  {itm.product} (${itm.price.toFixed(2)})
                                 </div>
                               );
                             })()}
@@ -430,9 +487,8 @@ function App() {
                             {isNotLast && (
                               <div style={{
                                 width: '40px',
-                                height: '4px',
+                                height: '3px',
                                 background: 'black',
-                                margin: `0 -${CONNECTOR_OVERLAP}px`,
                                 zIndex: 0
                               }} />
                             )}

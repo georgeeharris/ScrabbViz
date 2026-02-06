@@ -293,6 +293,7 @@ function App() {
   const MIN_VERTICAL_CONNECTOR_WIDTH = 3; // Minimum width for vertical connectors
   const BASE_VERTICAL_CONNECTOR_HEIGHT = 30; // Base height for vertical connector
   const VERTICAL_CONNECTOR_SPACING = 15; // Vertical spacing between multiple connectors (increased for better visibility)
+  const HORIZONTAL_CONNECTOR_OFFSET = 5; // Horizontal offset per connector to prevent overlap
 
   // Create render data with prime-based coloring using clusters
   const renderStructure = sortedHorizontalClusters.map((clusterItems, clusterIdx) => {
@@ -481,7 +482,7 @@ function App() {
                         const toX = conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
                         
                         // Add horizontal offset to separate overlapping connectors
-                        const horizontalOffset = connIdx * 5;
+                        const horizontalOffset = connIdx * HORIZONTAL_CONNECTOR_OFFSET;
                         
                         return (
                           <div

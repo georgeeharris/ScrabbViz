@@ -12,6 +12,10 @@ This visualization tool renders connected grocery products in a spatial layout w
 
 ## Features
 
+- **Dual Rendering Modes**: Choose between HTML-based or SVG-based visualization, or view both side-by-side for comparison
+  - **HTML Mode**: Traditional DOM-based rendering with flexbox layout
+  - **SVG Mode**: Vector-based rendering with crisp, drawn connections - especially clean when displaying multiple connections from single nodes
+  - **Toggle Control**: Switch between modes using the fixed toggle in the top-right corner
 - **Dynamic Cluster Formation**: Products are grouped using relationship pairs through a Union-Find algorithm
 - **Horizontal Clustering**: Products are organized horizontally within clusters based on horizontal pairs
 - **Vertical Clustering**: Clusters are organized vertically based on vertical pairs, creating stacked groups
@@ -62,6 +66,32 @@ Products are connected through two types of relationship pairs:
   ```
   
   When vertical pairs are defined, clusters containing the linked products are displayed vertically stacked with visual connector lines. For example, if product A is in Cluster 1 and product D is in Cluster 2, these clusters will be shown vertically connected.
+
+## Visualization Modes
+
+The application offers three visualization modes accessible via a toggle control in the top-right corner:
+
+### HTML Mode
+- Traditional DOM-based rendering using div elements
+- Flexbox layout with CSS styling
+- Horizontal connectors as div elements with background colors
+- Vertical connectors as absolutely positioned div elements
+- Best for: Simple layouts, familiar HTML/CSS rendering
+
+### SVG Mode  
+- Vector-based rendering using native SVG elements
+- Crisp, anti-aliased lines and shapes
+- Lines drawn using `<line>` elements for precise connections
+- Cards rendered as `<rect>` elements with `<text>` overlays
+- Best for: Complex connections, multiple overlapping lines, printing/exporting
+- Advantages: Scalable without quality loss, cleaner appearance especially with many connections
+
+### Both Mode (Default)
+- Displays both HTML and SVG versions side-by-side for comparison
+- Allows you to see the differences in rendering approaches
+- Useful for choosing which visualization works best for your data
+
+All three modes use the same clustering logic, positioning algorithms, and data structures - only the rendering approach differs.
 
 ## How It Works
 

@@ -380,6 +380,11 @@ function App() {
   const CONNECTOR_WIDTH = 40; // Width of horizontal connector line
   const HORIZONTAL_CONNECTOR_OFFSET = 5; // Horizontal offset per connector to prevent overlap
 
+  // Viewport padding constants for auto-scaling calculations
+  const VIEWPORT_PADDING = 40; // Padding around the content in viewport
+  const CONTROL_PANEL_WIDTH = 280; // Width reserved for the control panel
+  const PERFORMANCE_OVERLAY_WIDTH = 300; // Width reserved for the performance overlay
+
   // Create render data with prime-based coloring using clusters - memoized
   const renderStructure = useMemo(() => {
     return sortedHorizontalClusters.map((clusterItems, clusterIdx) => {
@@ -768,12 +773,8 @@ function App() {
   
   // Calculate scale to fit viewport with some padding - memoized to prevent re-renders
   const scale = useMemo(() => {
-    const viewportPadding = 40; // Padding around the content
-    const controlPanelWidth = 280; // Space for control panel
-    const performanceOverlayWidth = 300; // Space for performance overlay
-    
-    const availableWidth = viewportDimensions.width - controlPanelWidth - performanceOverlayWidth - viewportPadding * 2;
-    const availableHeight = viewportDimensions.height - viewportPadding * 2;
+    const availableWidth = viewportDimensions.width - CONTROL_PANEL_WIDTH - PERFORMANCE_OVERLAY_WIDTH - VIEWPORT_PADDING * 2;
+    const availableHeight = viewportDimensions.height - VIEWPORT_PADDING * 2;
     
     const scaleX = availableWidth / contentWidth;
     const scaleY = availableHeight / contentHeight;

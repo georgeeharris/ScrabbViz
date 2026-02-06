@@ -404,6 +404,9 @@ function App() {
     
     currentY = 140;
 
+    // Track Y positions of each cluster for vertical connectors
+    const clusterYPositions = new Map<number, number>();
+
     verticalClusters.forEach((verticalCluster, verticalIdx) => {
       // Super cluster label
       elements.push(
@@ -452,13 +455,7 @@ function App() {
           for (let prevPos = 0; prevPos < currentPosition; prevPos++) {
             const prevClusterIdx = verticalCluster[prevPos];
             const prevCluster = sortedHorizontalClusters[prevClusterIdx];
-            
-            // Find the Y position of the previous cluster
-            let prevClusterY = clusterStartY;
-            for (let i = 0; i < prevPos; i++) {
-              prevClusterY += CLUSTER_VERTICAL_SPACING + BASE_VERTICAL_CONNECTOR_HEIGHT + 
-                             (connectors.filter(c => c.targetClusterIdx === verticalCluster[i]).length - 1) * VERTICAL_CONNECTOR_SPACING;
-            }
+            const prevClusterY = clusterYPositions.get(prevClusterIdx) || clusterStartY;
             
             prevCluster.forEach((prevProduct, prevIdx) => {
               const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
@@ -471,7 +468,7 @@ function App() {
                     toIdx: currentIdx, 
                     targetClusterIdx: prevClusterIdx, 
                     clusterSpan,
-                    fromY: prevClusterY + 50 // Center of previous card
+                    fromY: prevClusterY + 30 // Center of previous card
                   });
                 }
               });
@@ -483,7 +480,7 @@ function App() {
         if (!isFirst && connectors.length > 0) {
           connectors.forEach((conn, connIdx) => {
             const prevOffset = clusterOffsets.get(conn.targetClusterIdx) || 0;
-            const fromX = SVG_PADDING + Math.max(0, prevOffset) + prevOffset + conn.fromIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
+            const fromX = SVG_PADDING + Math.max(0, prevOffset) + conn.fromIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
             const toX = SVG_PADDING + Math.max(0, offset) + conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
             const horizontalOffset = connIdx * HORIZONTAL_CONNECTOR_OFFSET;
             
@@ -566,6 +563,9 @@ function App() {
           }
         });
         
+        // Store the Y position of this cluster before moving to the next
+        clusterYPositions.set(horizontalClusterIdx, currentY);
+        
         currentY += 80 + CLUSTER_VERTICAL_SPACING;
       });
       
@@ -595,7 +595,7 @@ function App() {
         width={SVG_WIDTH} 
         height={totalHeight}
         style={{
-          background: `linear-gradient(117deg, #${Math.abs(Math.sin(0.5) * 16777215).toString(16).substring(0,6)} 0%, #${Math.abs(Math.cos(0.7) * 16777215).toString(16).substring(0,6)} 100%)`,
+          background: `linear-gradient(117deg, #${Math.abs(Math.sin(0.5) * 16777215).toString(16).substring(0,6).padStart(6, '0')} 0%, #${Math.abs(Math.cos(0.7) * 16777215).toString(16).substring(0,6).padStart(6, '0')} 100%)`,
           border: '1px solid #ccc',
           borderRadius: '8px'
         }}

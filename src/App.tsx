@@ -490,14 +490,12 @@ function App() {
                 x1={fromX + horizontalOffset}
                 y1={conn.fromY}
                 x2={toX + horizontalOffset}
-                y2={currentY}
+                y2={currentY + 30}
                 stroke="black"
                 strokeWidth="3"
               />
             );
           });
-          
-          currentY += BASE_VERTICAL_CONNECTOR_HEIGHT + (connectors.length - 1) * VERTICAL_CONNECTOR_SPACING;
         }
         
         // Draw cluster products
@@ -554,7 +552,7 @@ function App() {
                 key={`hconn-${cardIdx}`}
                 x1={cardX + CARD_WIDTH}
                 y1={cardY + 30}
-                x2={cardX + CARD_WIDTH + CARD_GAP}
+                x2={cardX + CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH}
                 y2={cardY + 30}
                 stroke="black"
                 strokeWidth="3"
@@ -563,8 +561,8 @@ function App() {
           }
         });
         
-        // Store the Y position of this cluster before moving to the next
-        clusterYPositions.set(horizontalClusterIdx, currentY);
+        // Store the Y position of this cluster (center of card) before moving to the next
+        clusterYPositions.set(horizontalClusterIdx, currentY + 30);
         
         currentY += 80 + CLUSTER_VERTICAL_SPACING;
       });

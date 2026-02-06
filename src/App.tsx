@@ -36,7 +36,6 @@ const primeSequence = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
 
 function App() {
   const [hoverIdx, setHoverIdx] = useState<number>(-1);
-  const [viewMode, setViewMode] = useState<'html' | 'svg' | 'both'>('both');
 
   // Sample data with 3 separate super clusters
   const groceryData: TGrocery[] = [
@@ -291,9 +290,6 @@ function App() {
   const CARD_WIDTH = 200; // Approximate card width including padding
   const CARD_GAP = 20; // Gap between cards in horizontal cluster
   const CONNECTOR_WIDTH = 40; // Width of horizontal connector line
-  const MIN_VERTICAL_CONNECTOR_WIDTH = 3; // Minimum width for vertical connectors
-  const BASE_VERTICAL_CONNECTOR_HEIGHT = 30; // Base height for vertical connector
-  const VERTICAL_CONNECTOR_SPACING = 15; // Vertical spacing between multiple connectors (increased for better visibility)
   const HORIZONTAL_CONNECTOR_OFFSET = 5; // Horizontal offset per connector to prevent overlap
 
   // Create render data with prime-based coloring using clusters
@@ -307,8 +303,6 @@ function App() {
     
     return { mfg: clusterLabel, itemsForMfg: clusterItems, colorSeed };
   });
-
-  let globalIdx = 0;
 
   // Calculate horizontal offsets for each cluster based on vertical connections
   const calculateClusterOffsets = (): Map<number, number> => {
@@ -380,7 +374,7 @@ function App() {
     // Title and legend
     elements.push(
       <text key="title" x={SVG_WIDTH / 2} y="40" textAnchor="middle" fontSize="48" fontWeight="900" fill="#1a1a2e">
-        Grocery Product Relationship Grid (SVG)
+        Grocery Product Relationship Grid
       </text>
     );
     
@@ -609,314 +603,17 @@ function App() {
     );
   };
 
-  // HTML rendering function (existing code wrapped)
-  const renderHTML = () => (
-    <div style={{ 
-      width: '100%', 
-      minHeight: '100vh', 
-      padding: '80px 60px',
-      background: `linear-gradient(${117}deg, #${Math.abs(Math.sin(0.5) * 16777215).toString(16).substring(0,6)} 0%, #${Math.abs(Math.cos(0.7) * 16777215).toString(16).substring(0,6)} 100%)`
-    }}>
-      <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
-        <header style={{ textAlign: 'center', marginBottom: '80px' }}>
-          <h1 style={{ 
-            fontSize: `${48 + Math.sin(0.3) * 8}px`, 
-            fontWeight: 900,
-            color: '#1a1a2e',
-            marginBottom: '40px'
-          }}>
-            Grocery Product Relationship Grid
-          </h1>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '70px', flexWrap: 'wrap' }}>
-            <div style={{ 
-              padding: '18px 36px',
-              background: `hsl(${210}, 70%, 50%)`,
-              color: 'white',
-              borderRadius: '35px',
-              fontWeight: 700,
-              fontSize: '17px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.2)'
-            }}>
-              ⟷ Horizontal: Product Relationships
-            </div>
-            <div style={{ 
-              padding: '18px 36px',
-              background: `hsl(${340}, 70%, 50%)`,
-              color: 'white',
-              borderRadius: '35px',
-              fontWeight: 700,
-              fontSize: '17px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.2)'
-            }}>
-              ↕ Vertical: Cluster Organization
-            </div>
-          </div>
-        </header>
 
-        {verticalClusters.map((verticalCluster, verticalIdx) => (
-          <div 
-            key={verticalIdx}
-            style={{
-              marginBottom: '120px', // Increased spacing between super clusters
-              position: 'relative',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              paddingBottom: verticalIdx < verticalClusters.length - 1 ? '40px' : '0',
-              borderBottom: verticalIdx < verticalClusters.length - 1 ? '3px dashed rgba(0,0,0,0.15)' : 'none'
-            }}
-          >
-            {/* Super Cluster Label */}
-            <div style={{
-              fontSize: '24px',
-              fontWeight: 800,
-              color: '#1a1a2e',
-              marginBottom: '30px',
-              padding: '10px 20px',
-              background: 'rgba(255,255,255,0.8)',
-              borderRadius: '8px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-              Super Cluster {verticalIdx + 1}
-            </div>
-            
-            {verticalCluster.map((horizontalClusterIdx, positionInVertical) => {
-              const struct = renderStructure[horizontalClusterIdx];
-              const bgHue = struct.colorSeed;
-              const bgColor = `hsl(${bgHue}, 65%, 88%)`;
-              const isFirst = positionInVertical === 0;
-              const offset = clusterOffsets.get(horizontalClusterIdx) || 0;
-              
-              // Calculate vertical connectors - connect to any previous cluster with a declared connection
-              const connectors: Array<{fromIdx: number, toIdx: number, targetClusterIdx: number, clusterSpan: number}> = [];
-              if (!isFirst) {
-                const currentPosition = positionInVertical;
-                const currentCluster = sortedHorizontalClusters[horizontalClusterIdx];
-                
-                // Look through all previous clusters to find ones with declared connections
-                for (let prevPos = 0; prevPos < currentPosition; prevPos++) {
-                  const prevClusterIdx = verticalCluster[prevPos];
-                  const prevCluster = sortedHorizontalClusters[prevClusterIdx];
-                  
-                  // Check if any product in previous cluster connects to current cluster
-                  prevCluster.forEach((prevProduct, prevIdx) => {
-                    const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
-                    connectedProductIds.forEach(connectedProductId => {
-                      const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
-                      if (currentIdx !== -1) {
-                        // Only add if we haven't already added a connector for this current product
-                        const alreadyConnected = connectors.some(c => c.toIdx === currentIdx);
-                        if (!alreadyConnected) {
-                          const clusterSpan = currentPosition - prevPos;
-                          connectors.push({ fromIdx: prevIdx, toIdx: currentIdx, targetClusterIdx: prevClusterIdx, clusterSpan });
-                        }
-                      }
-                    });
-                  });
-                }
-              }
-              
-              return (
-                <div key={horizontalClusterIdx} style={{ width: '100%' }}>
-                  {!isFirst && connectors.length > 0 && (
-                    <div style={{
-                      position: 'relative',
-                      height: `${BASE_VERTICAL_CONNECTOR_HEIGHT + (connectors.length - 1) * VERTICAL_CONNECTOR_SPACING}px`,
-                      marginLeft: `${Math.max(0, offset)}px`
-                    }}>
-                      {connectors.map((conn, connIdx) => {
-                        const prevOffset = clusterOffsets.get(conn.targetClusterIdx) || 0;
-                        const fromX = prevOffset - offset + conn.fromIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
-                        const toX = conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
-                        
-                        // Add horizontal offset to separate overlapping connectors
-                        const horizontalOffset = connIdx * HORIZONTAL_CONNECTOR_OFFSET;
-                        
-                        return (
-                          <div
-                            key={connIdx}
-                            style={{
-                              position: 'absolute',
-                              left: `${Math.min(fromX, toX) + horizontalOffset}px`,
-                              top: `${connIdx * VERTICAL_CONNECTOR_SPACING}px`,
-                              width: `${Math.abs(fromX - toX) || MIN_VERTICAL_CONNECTOR_WIDTH}px`,
-                              height: `${BASE_VERTICAL_CONNECTOR_HEIGHT}px`,
-                              background: 'black',
-                              borderRadius: '2px'
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                  
-                  <div 
-                    style={{
-                      marginBottom: '0px',
-                      marginLeft: `${Math.max(0, offset)}px`
-                    }}
-                  >
-                    <div style={{
-                      display: 'flex',
-                      gap: '20px',
-                      alignItems: 'center',
-                      flexWrap: 'nowrap'
-                    }}>
-                      {struct.itemsForMfg.map((itm, itmIdx) => {
-                        const isNotLast = itmIdx < struct.itemsForMfg.length - 1;
-                        return (
-                          <div key={itmIdx} style={{ display: 'flex', alignItems: 'center' }}>
-                            {(() => {
-                              const cardIdx = globalIdx++;
-                              const isHovered = hoverIdx === cardIdx;
-                              
-                              return (
-                                <div
-                                  onMouseEnter={() => setHoverIdx(cardIdx)}
-                                  onMouseLeave={() => setHoverIdx(-1)}
-                                  style={{
-                                    width: `${CARD_WIDTH}px`,
-                                    padding: '12px 20px',
-                                    background: isHovered 
-                                      ? `linear-gradient(${145 + itmIdx * 15}deg, ${bgColor}, white)` 
-                                      : `linear-gradient(180deg, ${bgColor}, #fafafa)`,
-                                    border: isHovered 
-                                      ? `3px solid hsl(${bgHue}, 70%, 45%)` 
-                                      : '2px solid #d1d5db',
-                                    borderRadius: '10px',
-                                    cursor: 'pointer',
-                                    transform: isHovered ? 'translateY(-8px) scale(1.05)' : 'translateY(0) scale(1)',
-                                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    boxShadow: isHovered 
-                                      ? `0 12px 24px hsla(${bgHue}, 70%, 45%, 0.3)` 
-                                      : '0 2px 8px rgba(0,0,0,0.08)',
-                                    position: 'relative',
-                                    zIndex: isHovered ? 20 : 1,
-                                    fontSize: '14px',
-                                    fontWeight: 600,
-                                    color: '#1f2937',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    boxSizing: 'border-box'
-                                  }}
-                                >
-                                  {itm.product} (${itm.price.toFixed(2)})
-                                </div>
-                              );
-                            })()}
-                            
-                            {isNotLast && (
-                              <div style={{
-                                width: '40px',
-                                height: '3px',
-                                background: 'black',
-                                zIndex: 0
-                              }} />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 
   return (
-    <div>
-      {/* View mode toggle */}
-      <div style={{
-        position: 'fixed',
-        top: '20px',
-        right: '20px',
-        zIndex: 1000,
-        display: 'flex',
-        gap: '10px',
-        background: 'white',
-        padding: '10px',
-        borderRadius: '8px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-      }}>
-        <button
-          onClick={() => setViewMode('html')}
-          style={{
-            padding: '8px 16px',
-            background: viewMode === 'html' ? '#4f46e5' : '#e5e7eb',
-            color: viewMode === 'html' ? 'white' : '#374151',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: '14px'
-          }}
-        >
-          HTML
-        </button>
-        <button
-          onClick={() => setViewMode('svg')}
-          style={{
-            padding: '8px 16px',
-            background: viewMode === 'svg' ? '#4f46e5' : '#e5e7eb',
-            color: viewMode === 'svg' ? 'white' : '#374151',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: '14px'
-          }}
-        >
-          SVG
-        </button>
-        <button
-          onClick={() => setViewMode('both')}
-          style={{
-            padding: '8px 16px',
-            background: viewMode === 'both' ? '#4f46e5' : '#e5e7eb',
-            color: viewMode === 'both' ? 'white' : '#374151',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 600,
-            fontSize: '14px'
-          }}
-        >
-          Both
-        </button>
-      </div>
-
-      {/* Render based on view mode */}
-      {viewMode === 'html' && renderHTML()}
-      {viewMode === 'svg' && (
-        <div style={{ 
-          padding: '20px',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh'
-        }}>
-          {renderSVG()}
-        </div>
-      )}
-      {viewMode === 'both' && (
-        <div style={{ padding: '20px' }}>
-          <div style={{ marginBottom: '40px' }}>
-            <h2 style={{ textAlign: 'center', fontSize: '32px', fontWeight: 'bold', marginBottom: '20px' }}>HTML Version</h2>
-            {renderHTML()}
-          </div>
-          <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'center' }}>
-            <div>
-              <h2 style={{ textAlign: 'center', fontSize: '32px', fontWeight: 'bold', marginBottom: '20px' }}>SVG Version</h2>
-              {renderSVG()}
-            </div>
-          </div>
-        </div>
-      )}
+    <div style={{ 
+      padding: '20px',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh'
+    }}>
+      {renderSVG()}
     </div>
   );
 }

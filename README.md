@@ -12,17 +12,14 @@ This visualization tool renders connected grocery products in a spatial layout w
 
 ## Features
 
-- **Dual Rendering Modes**: Choose between HTML-based or SVG-based visualization, or view both side-by-side for comparison
-  - **HTML Mode**: Traditional DOM-based rendering with flexbox layout
-  - **SVG Mode**: Vector-based rendering with crisp, drawn connections - especially clean when displaying multiple connections from single nodes
-  - **Toggle Control**: Switch between modes using the fixed toggle in the top-right corner
+- **SVG-based Visualization**: Vector-based rendering with crisp, drawn connections - especially clean when displaying multiple connections from single nodes
 - **Dynamic Cluster Formation**: Products are grouped using relationship pairs through a Union-Find algorithm
 - **Horizontal Clustering**: Products are organized horizontally within clusters based on horizontal pairs
 - **Vertical Clustering**: Clusters are organized vertically based on vertical pairs, creating stacked groups
 - **Multiple Super Clusters**: Support for multiple independent cluster groups that are visually separated (e.g., white bread vs wholemeal bread)
 - **Price-Based Ordering**: Products and clusters are sorted by price (most expensive first)
 - **Flexible Relationships**: Supports transitive relationships (e.g., A-B and A-C creates A-B-C cluster)
-- **Visual Connectors**: Vertical relationships are displayed with gradient connector lines between clusters
+- **Visual Connectors**: Vertical relationships are displayed with connector lines between clusters
 - **Interactive Cards**: Hover effects with smooth animations and visual feedback
 - **Fibonacci Spacing**: Card widths increase using the Fibonacci sequence for organic visual progression
 - **Prime-based Color Coding**: Each cluster gets a unique color generated using prime number algorithms
@@ -67,33 +64,14 @@ Products are connected through two types of relationship pairs:
   
   When vertical pairs are defined, clusters containing the linked products are displayed vertically stacked with visual connector lines. For example, if product A is in Cluster 1 and product D is in Cluster 2, these clusters will be shown vertically connected.
 
-## Visualization Modes
+## Visualization
 
-The application offers three visualization modes accessible via a toggle control in the top-right corner:
-
-### HTML Mode
-- Traditional DOM-based rendering using div elements
-- Flexbox layout with CSS styling
-- Horizontal connectors as div elements with background colors
-- Vertical connectors as absolutely positioned div elements
-- Best for: Simple layouts, familiar HTML/CSS rendering
-
-### SVG Mode  
-- Vector-based rendering using native SVG elements
-- Crisp, anti-aliased lines and shapes
-- Lines drawn using `<line>` elements for precise connections
-- Cards rendered as `<rect>` elements with `<text>` overlays
-- Best for: Complex connections, multiple overlapping lines, printing/exporting
-- Advantages: Scalable without quality loss, cleaner appearance especially with many connections
-
-### Both Mode (Default)
-- Displays both HTML and SVG versions side-by-side for comparison
-- Allows you to see the differences in rendering approaches
-- Useful for choosing which visualization works best for your data
-
-All three modes use the same clustering logic, positioning algorithms, and data structures - only the rendering approach differs.
-
-## How It Works
+The application uses SVG (Scalable Vector Graphics) for rendering, which provides:
+- **Crisp, anti-aliased lines and shapes** that look clean at any zoom level
+- **Precise connections** using native `<line>` elements
+- **Scalability without quality loss** - perfect for printing or exporting
+- **Clean appearance** especially when displaying multiple overlapping connections
+- **Professional output** suitable for presentations and documentation
 
 ### Clustering Algorithm
 

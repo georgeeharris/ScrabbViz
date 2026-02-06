@@ -1,5 +1,54 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import './App.css'
+
+// Performance timing utility
+interface TimingResult {
+  name: string;
+  duration: number;
+}
+
+class PerformanceProfiler {
+  private timings: TimingResult[] = [];
+  private startTimes: Map<string, number> = new Map();
+
+  start(name: string): void {
+    this.startTimes.set(name, performance.now());
+  }
+
+  end(name: string): number {
+    const startTime = this.startTimes.get(name);
+    if (startTime === undefined) {
+      console.warn(`No start time found for: ${name}`);
+      return 0;
+    }
+    const duration = performance.now() - startTime;
+    this.timings.push({ name, duration });
+    this.startTimes.delete(name);
+    return duration;
+  }
+
+  getTimings(): TimingResult[] {
+    return [...this.timings];
+  }
+
+  clear(): void {
+    this.timings = [];
+    this.startTimes.clear();
+  }
+
+  getTotalTime(): number {
+    return this.timings.reduce((sum, t) => sum + t.duration, 0);
+  }
+
+  printSummary(): void {
+    console.log('=== Performance Profile ===');
+    this.timings.forEach(t => {
+      console.log(`${t.name}: ${t.duration.toFixed(2)}ms`);
+    });
+    console.log(`Total: ${this.getTotalTime().toFixed(2)}ms`);
+    console.log('========================');
+  }
+}
 
 type TGrocery = { id: string; product: string; price: number; packSize: string; brand: string };
 type TProductPair = [string, string];
@@ -35,10 +84,27 @@ class UnionFind {
 const primeSequence = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
 
 function App() {
-  const [hoverIdx, setHoverIdx] = useState<number>(-1);
+  const [showPerformanceOverlay, setShowPerformanceOverlay] = useState<boolean>(true);
+  const [useTestData, setUseTestData] = useState<boolean>(false);
+  const [lastRenderTime, setLastRenderTime] = useState<TimingResult[]>([]);
+
+  // Test data: Single cluster with 40 products for performance testing
+  const testData: TGrocery[] = Array.from({ length: 40 }, (_, i) => ({
+    id: `T${i + 1}`,
+    product: `Test Product ${i + 1}`,
+    price: 10 - (i * 0.2), // Descending prices from 10.0 to 2.2
+    packSize: `${100 + i * 10}g`,
+    brand: `Brand ${Math.floor(i / 5) + 1}`
+  }));
+
+  const testHorizontalPairs: TProductPair[] = Array.from({ length: 39 }, (_, i) => 
+    [`T${i + 1}`, `T${i + 2}`] as TProductPair
+  );
+
+  const testVerticalPairs: TProductPair[] = []; // Single horizontal cluster, no vertical pairs
 
   // Sample data with 3 separate super clusters
-  const groceryData: TGrocery[] = [
+  const groceryData: TGrocery[] = useTestData ? testData : [
     // Super Cluster 1: White Sliced Bread
     { id: "A", product: "Hovis White 800g", price: 1.35, packSize: "800g", brand: "Hovis" },
     { id: "B", product: "Hovis White 400g", price: 0.85, packSize: "400g", brand: "Hovis" },
@@ -65,7 +131,7 @@ function App() {
   ];
 
   // Relationship pairs - these define which products are related
-  const horizontalPairs: TProductPair[] = [
+  const horizontalPairs: TProductPair[] = useTestData ? testHorizontalPairs : [
     // Super Cluster 1: White Bread - horizontal clusters by brand
     ["B", "A"], // Hovis white bread by size
     ["D", "C"], // Tesco white bread by size
@@ -84,7 +150,7 @@ function App() {
 
   // Vertical pairs define cross-cluster relationships
   // Vertical pairs within each super cluster connect related products between brands/types
-  const verticalPairs: TProductPair[] = [
+  const verticalPairs: TProductPair[] = useTestData ? testVerticalPairs : [
     // Super Cluster 1: White Bread - vertical connections between brands (800g products)
     ["A", "C"], // Hovis 800g to Tesco 800g
     ["C", "E"], // Tesco 800g to Allinson 800g
@@ -179,24 +245,39 @@ function App() {
     return sorted.map(id => products.get(id)!);
   };
 
-  // Create product map
-  const productMap = new Map<string, TGrocery>();
-  groceryData.forEach(p => productMap.set(p.id, p));
+  // Create product map - memoized to avoid recreation
+  const productMap = useMemo(() => {
+    const map = new Map<string, TGrocery>();
+    groceryData.forEach(p => map.set(p.id, p));
+    return map;
+  }, [groceryData]);
 
-  // Build horizontal clusters
-  const horizontalClusters = buildClusters(horizontalPairs);
-  
-  // Sort each horizontal cluster by price (most expensive at right/first)
-  const sortedHorizontalClusters = horizontalClusters.map(cluster => 
-    sortCluster(cluster, horizontalPairs, productMap)
-  );
-  
-  // Sort horizontal clusters by max price (most expensive cluster first/top)
-  sortedHorizontalClusters.sort((a, b) => {
-    const maxPriceA = Math.max(...a.map(p => p.price));
-    const maxPriceB = Math.max(...b.map(p => p.price));
-    return maxPriceB - maxPriceA;
-  });
+  // Build and sort horizontal clusters - memoized with profiling
+  const { sortedHorizontalClusters, clusteringTime } = useMemo(() => {
+    const profiler = new PerformanceProfiler();
+    
+    profiler.start('buildClusters');
+    const horizontalClusters = buildClusters(horizontalPairs);
+    profiler.end('buildClusters');
+    
+    profiler.start('sortClusters');
+    const sorted = horizontalClusters.map(cluster => 
+      sortCluster(cluster, horizontalPairs, productMap)
+    );
+    profiler.end('sortClusters');
+    
+    // Sort horizontal clusters by max price (most expensive cluster first/top)
+    sorted.sort((a, b) => {
+      const maxPriceA = Math.max(...a.map(p => p.price));
+      const maxPriceB = Math.max(...b.map(p => p.price));
+      return maxPriceB - maxPriceA;
+    });
+    
+    return { 
+      sortedHorizontalClusters: sorted, 
+      clusteringTime: profiler.getTotalTime() 
+    };
+  }, [horizontalPairs, productMap]);
 
   // Build vertical cluster groupings based on verticalPairs
   // This groups horizontal clusters that should be displayed vertically together
@@ -246,7 +327,7 @@ function App() {
     return verticalClusters;
   };
 
-  const verticalClusters = buildVerticalClusters();
+  const verticalClusters = useMemo(() => buildVerticalClusters(), [sortedHorizontalClusters, verticalPairs]);
 
   // Build vertical connection map: maps product IDs to their connected product IDs
   // Stores connections in both directions to support bidirectional lookup
@@ -284,7 +365,7 @@ function App() {
     return connectionMap;
   };
   
-  const verticalConnectionMap = buildVerticalConnectionMap();
+  const verticalConnectionMap = useMemo(() => buildVerticalConnectionMap(), [sortedHorizontalClusters, verticalPairs]);
 
   // Card sizing constants used for layout calculations
   const CARD_WIDTH = 200; // Approximate card width including padding
@@ -292,21 +373,34 @@ function App() {
   const CONNECTOR_WIDTH = 40; // Width of horizontal connector line
   const HORIZONTAL_CONNECTOR_OFFSET = 5; // Horizontal offset per connector to prevent overlap
 
-  // Create render data with prime-based coloring using clusters
-  const renderStructure = sortedHorizontalClusters.map((clusterItems, clusterIdx) => {
-    // Use cluster index for label
-    const clusterLabel = `Cluster ${clusterIdx + 1}`;
-    
-    // Color from prime multiplication
-    const primeVal = primeSequence[clusterIdx % primeSequence.length];
-    const colorSeed = (primeVal * 13) % 360;
-    
-    return { mfg: clusterLabel, itemsForMfg: clusterItems, colorSeed };
-  });
+  // Create render data with prime-based coloring using clusters - memoized
+  const renderStructure = useMemo(() => {
+    return sortedHorizontalClusters.map((clusterItems, clusterIdx) => {
+      // Use cluster index for label
+      const clusterLabel = `Cluster ${clusterIdx + 1}`;
+      
+      // Color from prime multiplication
+      const primeVal = primeSequence[clusterIdx % primeSequence.length];
+      const colorSeed = (primeVal * 13) % 360;
+      
+      return { mfg: clusterLabel, itemsForMfg: clusterItems, colorSeed };
+    });
+  }, [sortedHorizontalClusters]);
 
-  // Calculate horizontal offsets for each cluster based on vertical connections
-  const calculateClusterOffsets = (): Map<number, number> => {
+  // Calculate horizontal offsets for each cluster based on vertical connections - memoized and optimized
+  const clusterOffsets = useMemo(() => {
+    const profiler = new PerformanceProfiler();
+    profiler.start('calculateClusterOffsets');
+    
     const offsets = new Map<number, number>();
+    
+    // Pre-build index maps for O(1) lookup instead of O(n) findIndex
+    const productIdToClusterIndex = new Map<string, { clusterIdx: number; positionInCluster: number }>();
+    sortedHorizontalClusters.forEach((cluster, clusterIdx) => {
+      cluster.forEach((product, positionInCluster) => {
+        productIdToClusterIndex.set(product.id, { clusterIdx, positionInCluster });
+      });
+    });
     
     verticalClusters.forEach(verticalCluster => {
       if (verticalCluster.length === 0) return;
@@ -319,7 +413,6 @@ function App() {
         const currentClusterIdx = verticalCluster[i];
         const prevClusterIdx = verticalCluster[i - 1];
         
-        const currentCluster = sortedHorizontalClusters[currentClusterIdx];
         const prevCluster = sortedHorizontalClusters[prevClusterIdx];
         
         // Find the first vertical connection from prev cluster to current cluster
@@ -331,10 +424,10 @@ function App() {
           const connectedProductIds = verticalConnectionMap.get(sourceProduct.id) || [];
           
           for (const connectedProductId of connectedProductIds) {
-            const targetIdx = currentCluster.findIndex(p => p.id === connectedProductId);
-            if (targetIdx !== -1) {
+            const targetInfo = productIdToClusterIndex.get(connectedProductId);
+            if (targetInfo && targetInfo.clusterIdx === currentClusterIdx) {
               sourceProductIdx = j;
-              targetProductIdx = targetIdx;
+              targetProductIdx = targetInfo.positionInCluster;
               break;
             }
           }
@@ -355,13 +448,28 @@ function App() {
       }
     });
     
+    const duration = profiler.end('calculateClusterOffsets');
+    console.log(`Offset calculation took: ${duration.toFixed(2)}ms`);
+    
     return offsets;
-  };
-  
-  const clusterOffsets = calculateClusterOffsets();
+  }, [sortedHorizontalClusters, verticalClusters, verticalConnectionMap]);
 
-  // SVG rendering function
-  const renderSVG = () => {
+  // Pre-build product position index for O(1) lookup in renderSVG
+  const productPositionIndex = useMemo(() => {
+    const index = new Map<string, { clusterIdx: number; positionInCluster: number }>();
+    sortedHorizontalClusters.forEach((cluster, clusterIdx) => {
+      cluster.forEach((product, positionInCluster) => {
+        index.set(product.id, { clusterIdx, positionInCluster });
+      });
+    });
+    return index;
+  }, [sortedHorizontalClusters]);
+
+  // SVG rendering function - memoized to avoid re-rendering on every hover
+  const svgContent = useMemo(() => {
+    const profiler = new PerformanceProfiler();
+    profiler.start('renderSVG');
+    
     const SVG_WIDTH = 1600;
     const SVG_PADDING = 60;
     const SUPER_CLUSTER_SPACING = 200;
@@ -444,7 +552,6 @@ function App() {
         const connectors: Array<{fromIdx: number, toIdx: number, targetClusterIdx: number, clusterSpan: number, fromY: number}> = [];
         if (!isFirst) {
           const currentPosition = positionInVertical;
-          const currentCluster = sortedHorizontalClusters[horizontalClusterIdx];
           
           // Look through all previous clusters to find ones with declared connections
           for (let prevPos = 0; prevPos < currentPosition; prevPos++) {
@@ -456,8 +563,9 @@ function App() {
             prevCluster.forEach((prevProduct, prevIdx) => {
               const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
               connectedProductIds.forEach(connectedProductId => {
-                const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
-                if (currentIdx !== -1) {
+                const targetInfo = productPositionIndex.get(connectedProductId);
+                if (targetInfo && targetInfo.clusterIdx === horizontalClusterIdx) {
+                  const currentIdx = targetInfo.positionInCluster;
                   // Only add if we haven't already added a connector for this current product
                   const alreadyConnected = connectors.some(c => c.toIdx === currentIdx);
                   if (!alreadyConnected) {
@@ -505,9 +613,8 @@ function App() {
           const bgColor = `hsl(${bgHue}, 65%, 88%)`;
           const borderColor = `hsl(${bgHue}, 70%, 45%)`;
           const cardIdx = svgGlobalIdx++;
-          const isHovered = hoverIdx === cardIdx;
           
-          // Card background
+          // Card background - using CSS class for hover effects
           elements.push(
             <rect
               key={`card-bg-${cardIdx}`}
@@ -517,15 +624,14 @@ function App() {
               height={60}
               rx="10"
               fill={bgColor}
-              stroke={isHovered ? borderColor : "#d1d5db"}
-              strokeWidth={isHovered ? "3" : "2"}
+              stroke={"#d1d5db"}
+              strokeWidth={"2"}
+              className="product-card"
+              data-border-color={borderColor}
               style={{ 
                 cursor: 'pointer',
-                filter: isHovered ? `drop-shadow(0 8px 12px ${borderColor}40)` : 'drop-shadow(0 2px 4px rgba(0,0,0,0.08))',
                 transition: 'all 0.25s'
               }}
-              onMouseEnter={() => setHoverIdx(cardIdx)}
-              onMouseLeave={() => setHoverIdx(-1)}
             />
           );
           
@@ -588,6 +694,14 @@ function App() {
     
     const totalHeight = currentY + 80;
     
+    const renderTime = profiler.end('renderSVG');
+    const allTimings = profiler.getTimings();
+    
+    // Store timing for overlay display
+    setTimeout(() => setLastRenderTime(allTimings), 0);
+    
+    console.log(`SVG render took: ${renderTime.toFixed(2)}ms`);
+    
     return (
       <svg 
         width={SVG_WIDTH} 
@@ -601,19 +715,99 @@ function App() {
         {elements}
       </svg>
     );
-  };
+  }, [sortedHorizontalClusters, verticalClusters, clusterOffsets, verticalConnectionMap, renderStructure, productPositionIndex]);
 
-
+  // Calculate total product count
+  const totalProducts = groceryData.length;
+  const totalClusters = sortedHorizontalClusters.length;
 
   return (
     <div style={{ 
       padding: '20px',
       display: 'flex',
-      justifyContent: 'center',
+      flexDirection: 'column',
       alignItems: 'center',
-      minHeight: '100vh'
+      minHeight: '100vh',
+      position: 'relative'
     }}>
-      {renderSVG()}
+      {/* Control Panel */}
+      <div style={{
+        position: 'fixed',
+        top: 20,
+        right: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        padding: '15px',
+        borderRadius: '8px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        zIndex: 1000,
+        minWidth: '250px'
+      }}>
+        <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', fontWeight: 'bold' }}>Controls</h3>
+        <label style={{ display: 'block', marginBottom: '10px', cursor: 'pointer' }}>
+          <input 
+            type="checkbox" 
+            checked={useTestData} 
+            onChange={(e) => setUseTestData(e.target.checked)}
+            style={{ marginRight: '8px' }}
+          />
+          Use Test Data (40 products)
+        </label>
+        <label style={{ display: 'block', marginBottom: '10px', cursor: 'pointer' }}>
+          <input 
+            type="checkbox" 
+            checked={showPerformanceOverlay} 
+            onChange={(e) => setShowPerformanceOverlay(e.target.checked)}
+            style={{ marginRight: '8px' }}
+          />
+          Show Performance Metrics
+        </label>
+      </div>
+
+      {/* Performance Overlay */}
+      {showPerformanceOverlay && (
+        <div style={{
+          position: 'fixed',
+          top: 20,
+          left: 20,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          color: 'white',
+          padding: '15px',
+          borderRadius: '8px',
+          fontFamily: 'monospace',
+          fontSize: '13px',
+          zIndex: 1000,
+          minWidth: '280px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+        }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.3)', paddingBottom: '5px' }}>
+            ⚡ Performance Metrics
+          </div>
+          <div style={{ marginBottom: '5px' }}>
+            📊 Total Products: <strong>{totalProducts}</strong>
+          </div>
+          <div style={{ marginBottom: '5px' }}>
+            🔗 Total Clusters: <strong>{totalClusters}</strong>
+          </div>
+          <div style={{ marginBottom: '5px' }}>
+            🏗️ Clustering Time: <strong>{clusteringTime.toFixed(2)}ms</strong>
+          </div>
+          {lastRenderTime.length > 0 && (
+            <>
+              <div style={{ marginTop: '10px', marginBottom: '5px', fontSize: '12px', opacity: 0.8 }}>
+                Last Render Breakdown:
+              </div>
+              {lastRenderTime.map((timing, idx) => (
+                <div key={idx} style={{ marginLeft: '10px', fontSize: '12px' }}>
+                  • {timing.name}: <strong>{timing.duration.toFixed(2)}ms</strong>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Main SVG Content */}
+      {svgContent}
     </div>
   );
 }

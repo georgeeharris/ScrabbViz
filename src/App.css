@@ -40,3 +40,13 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Product card hover effects - optimized to avoid re-renders */
+.product-card {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.08));
+}
+
+.product-card:hover {
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 8px 12px rgba(0,0,0,0.2)) !important;
+}

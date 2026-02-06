@@ -458,6 +458,7 @@ function App() {
                     connectedProductIds.forEach(connectedProductId => {
                       const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
                       if (currentIdx !== -1) {
+                        // clusterSpan tracks how many clusters this connector spans (reserved for future use)
                         const clusterSpan = currentPosition - prevPos;
                         connectors.push({ fromIdx: prevIdx, toIdx: currentIdx, targetClusterIdx: prevClusterIdx, clusterSpan });
                       }

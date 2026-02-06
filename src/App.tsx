@@ -78,11 +78,6 @@ function App() {
     ["F", "H"]  // OJ to Cereal
   ];
 
-  // Verify vertical pairs are defined (for future use)
-  if (verticalPairs.length === 0) {
-    console.warn('No vertical pairs defined');
-  }
-
   // Build clusters from pairs
   const buildClusters = (pairs: TProductPair[]): string[][] => {
     const uf = new UnionFind();
@@ -183,6 +178,56 @@ function App() {
     return maxPriceB - maxPriceA;
   });
 
+  // Build vertical cluster groupings based on verticalPairs
+  // This groups horizontal clusters that should be displayed vertically together
+  const buildVerticalClusters = (): number[][] => {
+    if (verticalPairs.length === 0) {
+      // No vertical pairs - each horizontal cluster is its own vertical group
+      return sortedHorizontalClusters.map((_, idx) => [idx]);
+    }
+
+    // Map product IDs to their horizontal cluster index
+    const productToClusterIdx = new Map<string, number>();
+    sortedHorizontalClusters.forEach((cluster, idx) => {
+      cluster.forEach(product => {
+        productToClusterIdx.set(product.id, idx);
+      });
+    });
+
+    // Build vertical cluster groups using Union-Find on horizontal cluster indices
+    const uf = new UnionFind();
+    verticalPairs.forEach(([productA, productB]) => {
+      const clusterIdxA = productToClusterIdx.get(productA);
+      const clusterIdxB = productToClusterIdx.get(productB);
+      
+      if (clusterIdxA !== undefined && clusterIdxB !== undefined) {
+        uf.union(String(clusterIdxA), String(clusterIdxB));
+      }
+    });
+
+    // Group horizontal cluster indices by their vertical cluster root
+    const verticalClusterMap = new Map<string, number[]>();
+    sortedHorizontalClusters.forEach((_, idx) => {
+      const idxStr = String(idx);
+      const root = uf.find(idxStr);
+      if (!verticalClusterMap.has(root)) {
+        verticalClusterMap.set(root, []);
+      }
+      verticalClusterMap.get(root)!.push(idx);
+    });
+
+    // Convert to array and sort each vertical cluster by the position of first horizontal cluster
+    const verticalClusters = Array.from(verticalClusterMap.values());
+    verticalClusters.forEach(group => group.sort((a, b) => a - b));
+    
+    // Sort vertical clusters by the index of their first horizontal cluster
+    verticalClusters.sort((a, b) => a[0] - b[0]);
+
+    return verticalClusters;
+  };
+
+  const verticalClusters = buildVerticalClusters();
+
   // Create render data with prime-based coloring using clusters
   const renderStructure = sortedHorizontalClusters.map((clusterItems, clusterIdx) => {
     // Use cluster index for label
@@ -240,148 +285,178 @@ function App() {
           </div>
         </header>
 
-        {renderStructure.map((struct, structIdx) => {
-          const bgHue = struct.colorSeed;
-          const bgColor = `hsl(${bgHue}, 65%, 88%)`;
-          
-          return (
-            <div 
-              key={structIdx}
-              style={{
-                marginBottom: '45px',
-                background: 'white',
-                borderRadius: '24px',
-                padding: '38px',
-                boxShadow: '0 12px 35px rgba(0,0,0,0.12)',
-                border: `5px solid ${bgColor}`
-              }}
-            >
-              <div style={{ display: 'flex', gap: '38px', alignItems: 'stretch' }}>
-                <div style={{
-                  minWidth: '200px',
-                  background: bgColor,
-                  borderRadius: '18px',
-                  padding: '32px 24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: `inset 0 2px 12px rgba(0,0,0,0.08)`
-                }}>
-                  <h2 style={{
-                    fontSize: '26px',
-                    fontWeight: 800,
-                    color: '#2d2d44',
-                    textAlign: 'center',
-                    margin: 0,
-                    wordBreak: 'break-word'
-                  }}>
-                    {struct.mfg}
-                  </h2>
-                </div>
-
-                <div style={{
-                  flex: 1,
-                  display: 'flex',
-                  gap: '28px',
-                  flexWrap: 'wrap'
-                }}>
-                  {struct.itemsForMfg.map((itm, itmIdx) => {
-                    const cardIdx = globalIdx++;
-                    const isHovered = hoverIdx === cardIdx;
-                    const cardW = fibSpacing(itmIdx);
-                    
-                    return (
-                      <div
-                        key={itmIdx}
-                        onMouseEnter={() => setHoverIdx(cardIdx)}
-                        onMouseLeave={() => setHoverIdx(-1)}
-                        style={{
-                          width: `${cardW}px`,
-                          minWidth: `${cardW}px`,
-                          padding: '26px',
-                          background: isHovered 
-                            ? `linear-gradient(${145 + itmIdx * 15}deg, ${bgColor}, white)` 
-                            : `linear-gradient(180deg, ${bgColor}, #fafafa)`,
-                          border: isHovered 
-                            ? `4px solid hsl(${bgHue}, 70%, 45%)` 
-                            : '3px solid #d1d5db',
-                          borderRadius: '17px',
-                          cursor: 'pointer',
-                          transform: isHovered ? 'translateY(-14px) scale(1.07)' : 'translateY(0) scale(1)',
-                          transition: 'all 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
-                          boxShadow: isHovered 
-                            ? `0 22px 45px hsla(${bgHue}, 70%, 45%, 0.35)` 
-                            : '0 4px 12px rgba(0,0,0,0.08)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '16px',
-                          position: 'relative',
-                          zIndex: isHovered ? 20 : 1
-                        }}
-                      >
-                        <div style={{
-                          position: 'absolute',
-                          top: '11px',
-                          right: '11px',
-                          width: '34px',
-                          height: '34px',
-                          borderRadius: '50%',
-                          background: `hsl(${bgHue}, 70%, 50%)`,
-                          color: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '14px',
+        {verticalClusters.map((verticalCluster, verticalIdx) => (
+          <div 
+            key={verticalIdx}
+            style={{
+              marginBottom: '60px',
+              position: 'relative'
+            }}
+          >
+            {verticalCluster.map((horizontalClusterIdx, positionInVertical) => {
+              const struct = renderStructure[horizontalClusterIdx];
+              const bgHue = struct.colorSeed;
+              const bgColor = `hsl(${bgHue}, 65%, 88%)`;
+              const isFirst = positionInVertical === 0;
+              const prevColorSeed = !isFirst ? renderStructure[verticalCluster[positionInVertical - 1]].colorSeed : 0;
+              
+              return (
+                <div key={horizontalClusterIdx}>
+                  {!isFirst && (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      margin: '15px 0'
+                    }}>
+                      <div style={{
+                        width: '4px',
+                        height: '30px',
+                        background: `linear-gradient(to bottom, hsl(${bgHue}, 60%, 60%), hsl(${prevColorSeed}, 60%, 60%))`,
+                        borderRadius: '2px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                      }} />
+                    </div>
+                  )}
+                  
+                  <div 
+                    style={{
+                      marginBottom: '0px',
+                      background: 'white',
+                      borderRadius: '24px',
+                      padding: '38px',
+                      boxShadow: '0 12px 35px rgba(0,0,0,0.12)',
+                      border: `5px solid ${bgColor}`
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: '38px', alignItems: 'stretch' }}>
+                      <div style={{
+                        minWidth: '200px',
+                        background: bgColor,
+                        borderRadius: '18px',
+                        padding: '32px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: `inset 0 2px 12px rgba(0,0,0,0.08)`
+                      }}>
+                        <h2 style={{
+                          fontSize: '26px',
                           fontWeight: 800,
-                          boxShadow: '0 3px 8px rgba(0,0,0,0.15)'
-                        }}>
-                          {itmIdx + 1}
-                        </div>
-
-                        <div style={{
-                          fontSize: '15px',
-                          fontWeight: 700,
-                          color: '#1f2937',
-                          lineHeight: '1.4',
-                          marginTop: '24px',
-                          minHeight: '42px'
-                        }}>
-                          {itm.product}
-                        </div>
-
-                        <div style={{
-                          padding: '12px 18px',
-                          background: 'rgba(255,255,255,0.92)',
-                          borderRadius: '12px',
-                          fontSize: '13px',
-                          fontWeight: 600,
-                          color: '#4b5563',
+                          color: '#2d2d44',
                           textAlign: 'center',
-                          border: '2px solid rgba(0,0,0,0.06)'
+                          margin: 0,
+                          wordBreak: 'break-word'
                         }}>
-                          {itm.packSize}
-                        </div>
-
-                        <div style={{
-                          padding: '15px',
-                          background: `linear-gradient(135deg, hsl(${150}, 60%, 45%), hsl(${180}, 60%, 45%))`,
-                          borderRadius: '13px',
-                          fontSize: '24px',
-                          fontWeight: 900,
-                          color: 'white',
-                          textAlign: 'center',
-                          boxShadow: '0 5px 15px rgba(0,0,0,0.15)'
-                        }}>
-                          ${itm.price.toFixed(2)}
-                        </div>
+                          {struct.mfg}
+                        </h2>
                       </div>
-                    );
-                  })}
+
+                      <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        gap: '28px',
+                        flexWrap: 'wrap'
+                      }}>
+                        {struct.itemsForMfg.map((itm, itmIdx) => {
+                          const cardIdx = globalIdx++;
+                          const isHovered = hoverIdx === cardIdx;
+                          const cardW = fibSpacing(itmIdx);
+                          
+                          return (
+                            <div
+                              key={itmIdx}
+                              onMouseEnter={() => setHoverIdx(cardIdx)}
+                              onMouseLeave={() => setHoverIdx(-1)}
+                              style={{
+                                width: `${cardW}px`,
+                                minWidth: `${cardW}px`,
+                                padding: '26px',
+                                background: isHovered 
+                                  ? `linear-gradient(${145 + itmIdx * 15}deg, ${bgColor}, white)` 
+                                  : `linear-gradient(180deg, ${bgColor}, #fafafa)`,
+                                border: isHovered 
+                                  ? `4px solid hsl(${bgHue}, 70%, 45%)` 
+                                  : '3px solid #d1d5db',
+                                borderRadius: '17px',
+                                cursor: 'pointer',
+                                transform: isHovered ? 'translateY(-14px) scale(1.07)' : 'translateY(0) scale(1)',
+                                transition: 'all 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: isHovered 
+                                  ? `0 22px 45px hsla(${bgHue}, 70%, 45%, 0.35)` 
+                                  : '0 4px 12px rgba(0,0,0,0.08)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '16px',
+                                position: 'relative',
+                                zIndex: isHovered ? 20 : 1
+                              }}
+                            >
+                              <div style={{
+                                position: 'absolute',
+                                top: '11px',
+                                right: '11px',
+                                width: '34px',
+                                height: '34px',
+                                borderRadius: '50%',
+                                background: `hsl(${bgHue}, 70%, 50%)`,
+                                color: 'white',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '14px',
+                                fontWeight: 800,
+                                boxShadow: '0 3px 8px rgba(0,0,0,0.15)'
+                              }}>
+                                {itmIdx + 1}
+                              </div>
+
+                              <div style={{
+                                fontSize: '15px',
+                                fontWeight: 700,
+                                color: '#1f2937',
+                                lineHeight: '1.4',
+                                marginTop: '24px',
+                                minHeight: '42px'
+                              }}>
+                                {itm.product}
+                              </div>
+
+                              <div style={{
+                                padding: '12px 18px',
+                                background: 'rgba(255,255,255,0.92)',
+                                borderRadius: '12px',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                color: '#4b5563',
+                                textAlign: 'center',
+                                border: '2px solid rgba(0,0,0,0.06)'
+                              }}>
+                                {itm.packSize}
+                              </div>
+
+                              <div style={{
+                                padding: '15px',
+                                background: `linear-gradient(135deg, hsl(${150}, 60%, 45%), hsl(${180}, 60%, 45%))`,
+                                borderRadius: '13px',
+                                fontSize: '24px',
+                                fontWeight: 900,
+                                color: 'white',
+                                textAlign: 'center',
+                                boxShadow: '0 5px 15px rgba(0,0,0,0.15)'
+                              }}>
+                                ${itm.price.toFixed(2)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -8,13 +8,16 @@ A React + TypeScript application that visualizes grocery products in 2D space, s
 
 This visualization tool renders connected grocery products in a spatial layout where:
 - **Horizontal Axis**: Represents product relationships within clusters (most expensive products appear first/rightmost)
-- **Vertical Axis**: Represents cluster organization (most expensive clusters appear at the top)
+- **Vertical Axis**: Represents cluster organization via vertical pairs (clusters linked by vertical pairs are stacked together)
 
 ## Features
 
 - **Dynamic Cluster Formation**: Products are grouped using relationship pairs through a Union-Find algorithm
+- **Horizontal Clustering**: Products are organized horizontally within clusters based on horizontal pairs
+- **Vertical Clustering**: Clusters are organized vertically based on vertical pairs, creating stacked groups
 - **Price-Based Ordering**: Products and clusters are sorted by price (most expensive first)
 - **Flexible Relationships**: Supports transitive relationships (e.g., A-B and A-C creates A-B-C cluster)
+- **Visual Connectors**: Vertical relationships are displayed with gradient connector lines between clusters
 - **Interactive Cards**: Hover effects with smooth animations and visual feedback
 - **Fibonacci Spacing**: Card widths increase using the Fibonacci sequence for organic visual progression
 - **Prime-based Color Coding**: Each cluster gets a unique color generated using prime number algorithms
@@ -49,21 +52,31 @@ Products are connected through two types of relationship pairs:
   ];
   ```
 
-- **Vertical Pairs**: Define cross-cluster relationships (for future vertical organization)
+- **Vertical Pairs**: Define cross-cluster relationships for vertical organization
   ```typescript
   const verticalPairs: TProductPair[] = [
-    ["A", "D"],  // Links clusters containing A and D
-    ["D", "F"]   // Links clusters containing D and F
+    ["A", "D"],  // Links clusters containing A and D vertically
+    ["D", "F"]   // Links clusters containing D and F vertically
   ];
   ```
+  
+  When vertical pairs are defined, clusters containing the linked products are displayed vertically stacked with visual connector lines. For example, if product A is in Cluster 1 and product D is in Cluster 2, these clusters will be shown vertically connected.
 
 ## How It Works
 
 ### Clustering Algorithm
+
+**Horizontal Clustering:**
 Products are grouped using a **Union-Find** data structure:
-1. Each product pair creates a union between two products
+1. Each horizontal pair creates a union between two products
 2. Transitive relationships are automatically handled (A-B and B-C creates A-B-C)
-3. Products in the same cluster share a common root in the union-find tree
+3. Products in the same horizontal cluster share a common root in the union-find tree
+
+**Vertical Clustering:**
+Horizontal clusters are organized vertically using another **Union-Find** algorithm:
+1. Each vertical pair links the horizontal clusters containing those products
+2. Clusters linked by vertical pairs are grouped into vertical clusters
+3. Vertical clusters are displayed stacked with connector lines showing relationships
 
 ### Ordering Logic
 1. **Within Clusters**: Products are sorted by price (descending - most expensive first)
@@ -104,12 +117,21 @@ horizontalPairs: [
   ["I", "H"]               // Cereal: Regular → Family Size
 ]
 
-// Vertical relationships link clusters (for future use)
+// Vertical relationships link clusters
 verticalPairs: [
-  ["A", "D"],  // Milk → Bread
-  ["D", "F"],  // Bread → OJ
-  ["F", "H"]   // OJ → Cereal
+  ["A", "D"],  // Milk → Bread (links vertically)
+  ["D", "F"],  // Bread → OJ (links vertically)
+  ["F", "H"]   // OJ → Cereal (links vertically)
 ]
+
+// This creates one vertical cluster with all four horizontal clusters stacked:
+// Cereal (H-I)
+//     |
+// OJ (F-G)
+//     |
+// Bread (D-E)
+//     |
+// Milk (A-B-C)
 ```
 
 ## Getting Started

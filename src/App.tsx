@@ -88,20 +88,27 @@ function App() {
   const [useTestData, setUseTestData] = useState<boolean>(false);
   const [lastRenderTime, setLastRenderTime] = useState<TimingResult[]>([]);
 
-  // Test data: Single cluster with 40 products for performance testing
-  const testData: TGrocery[] = Array.from({ length: 40 }, (_, i) => ({
+  // Test data: 7x7 grid (49 products) - 7 products wide, 7 clusters deep
+  const testData: TGrocery[] = Array.from({ length: 49 }, (_, i) => ({
     id: `T${i + 1}`,
     product: `Test Product ${i + 1}`,
-    price: 10 - (i * 0.2), // Descending prices from 10.0 to 2.2
+    price: 10 - (i * 0.15), // Descending prices
     packSize: `${100 + i * 10}g`,
-    brand: `Brand ${Math.floor(i / 5) + 1}`
+    brand: `Brand ${Math.floor(i / 7) + 1}`
   }));
 
-  const testHorizontalPairs: TProductPair[] = Array.from({ length: 39 }, (_, i) => 
-    [`T${i + 1}`, `T${i + 2}`] as TProductPair
-  );
+  // Create 7 horizontal clusters (rows) with 7 products each
+  const testHorizontalPairs: TProductPair[] = Array.from({ length: 42 }, (_, i) => {
+    const row = Math.floor(i / 6);
+    const col = i % 6;
+    const productIndex = row * 7 + col + 1;
+    return [`T${productIndex}`, `T${productIndex + 1}`] as TProductPair;
+  });
 
-  const testVerticalPairs: TProductPair[] = []; // Single horizontal cluster, no vertical pairs
+  // Create vertical connections between clusters (connect first product of each row)
+  const testVerticalPairs: TProductPair[] = Array.from({ length: 6 }, (_, i) => 
+    [`T${i * 7 + 1}`, `T${(i + 1) * 7 + 1}`] as TProductPair
+  );
 
   // Sample data with 3 separate super clusters
   const groceryData: TGrocery[] = useTestData ? testData : [
@@ -472,10 +479,24 @@ function App() {
     const profiler = new PerformanceProfiler();
     profiler.start('renderSVG');
     
-    const SVG_WIDTH = 1600;
+    // First pass: calculate the required content dimensions
     const SVG_PADDING = 60;
     const SUPER_CLUSTER_SPACING = 200;
     const CLUSTER_VERTICAL_SPACING = 80;
+    
+    // Calculate maximum width needed based on clusters
+    let maxContentWidth = 0;
+    verticalClusters.forEach(verticalCluster => {
+      verticalCluster.forEach(horizontalClusterIdx => {
+        const cluster = sortedHorizontalClusters[horizontalClusterIdx];
+        const offset = clusterOffsets.get(horizontalClusterIdx) || 0;
+        const clusterWidth = cluster.length * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) - CARD_GAP - CONNECTOR_WIDTH;
+        const totalWidth = Math.max(0, offset) + clusterWidth;
+        maxContentWidth = Math.max(maxContentWidth, totalWidth);
+      });
+    });
+    
+    const SVG_WIDTH = maxContentWidth + 2 * SVG_PADDING;
     let currentY = 80;
     let svgGlobalIdx = 0;
 
@@ -702,6 +723,7 @@ function App() {
     
     if (import.meta.env.DEV) {
       console.log(`SVG render took: ${renderTime.toFixed(2)}ms`);
+      console.log(`Content dimensions: ${SVG_WIDTH}x${totalHeight}`);
     }
     
     return {
@@ -718,17 +740,45 @@ function App() {
           {elements}
         </svg>
       ),
-      timings: allTimings
+      timings: allTimings,
+      contentWidth: SVG_WIDTH,
+      contentHeight: totalHeight
     };
   }, [sortedHorizontalClusters, verticalClusters, clusterOffsets, verticalConnectionMap, renderStructure, productPositionIndex]);
 
   // Update timing display when render completes - using useEffect
-  const { svg: svgElement, timings } = svgContent;
+  const { svg: svgElement, timings, contentWidth, contentHeight } = svgContent;
   useEffect(() => {
     if (timings && timings.length > 0) {
       setLastRenderTime(timings);
     }
   }, [timings]);
+
+  // Calculate scale to fit viewport
+  const [viewportDimensions, setViewportDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+  
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportDimensions({ width: window.innerWidth, height: window.innerHeight });
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
+  // Calculate scale to fit viewport with some padding - memoized to prevent re-renders
+  const scale = useMemo(() => {
+    const viewportPadding = 40; // Padding around the content
+    const controlPanelWidth = 280; // Space for control panel
+    const performanceOverlayWidth = 300; // Space for performance overlay
+    
+    const availableWidth = viewportDimensions.width - controlPanelWidth - performanceOverlayWidth - viewportPadding * 2;
+    const availableHeight = viewportDimensions.height - viewportPadding * 2;
+    
+    const scaleX = availableWidth / contentWidth;
+    const scaleY = availableHeight / contentHeight;
+    return Math.min(scaleX, scaleY, 1); // Never scale up, only down
+  }, [viewportDimensions, contentWidth, contentHeight]);
 
   // Calculate total product count
   const totalProducts = groceryData.length;
@@ -763,7 +813,7 @@ function App() {
             onChange={(e) => setUseTestData(e.target.checked)}
             style={{ marginRight: '8px' }}
           />
-          Use Test Data (40 products)
+          Use Test Data (49 products - 7x7)
         </label>
         <label style={{ display: 'block', marginBottom: '10px', cursor: 'pointer' }}>
           <input 
@@ -804,6 +854,12 @@ function App() {
           <div style={{ marginBottom: '5px' }}>
             🏗️ Clustering Time: <strong>{clusteringTime.toFixed(2)}ms</strong>
           </div>
+          <div style={{ marginBottom: '5px' }}>
+            📐 Content Size: <strong>{contentWidth.toFixed(0)}x{contentHeight.toFixed(0)}</strong>
+          </div>
+          <div style={{ marginBottom: '5px' }}>
+            🔍 Scale Factor: <strong>{(scale * 100).toFixed(1)}%</strong>
+          </div>
           {lastRenderTime.length > 0 && (
             <>
               <div style={{ marginTop: '10px', marginBottom: '5px', fontSize: '12px', opacity: 0.8 }}>
@@ -820,7 +876,13 @@ function App() {
       )}
 
       {/* Main SVG Content */}
-      {svgElement}
+      <div style={{
+        transform: `scale(${scale})`,
+        transformOrigin: 'top center',
+        transition: 'transform 0.3s ease-in-out'
+      }}>
+        {svgElement}
+      </div>
     </div>
   );
 }

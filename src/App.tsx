@@ -653,7 +653,7 @@ function App() {
               style={{ 
                 cursor: 'pointer',
                 transition: 'all 0.25s',
-                // @ts-ignore - CSS custom property
+                // @ts-expect-error - CSS custom property
                 '--border-color': borderColor
               }}
             />

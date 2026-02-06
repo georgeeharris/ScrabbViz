@@ -446,34 +446,40 @@ function App() {
         const offset = clusterOffsets.get(horizontalClusterIdx) || 0;
         const isFirst = positionInVertical === 0;
         
-        // Calculate vertical connectors - only connect to immediately previous cluster
+        // Calculate vertical connectors - connect to any previous cluster with a declared connection
         const connectors: Array<{fromIdx: number, toIdx: number, targetClusterIdx: number, clusterSpan: number, fromY: number}> = [];
         if (!isFirst) {
           const currentPosition = positionInVertical;
           const currentCluster = sortedHorizontalClusters[horizontalClusterIdx];
           
-          // Only look at the immediately previous cluster in the vertical group
-          const prevPos = currentPosition - 1;
-          const prevClusterIdx = verticalCluster[prevPos];
-          const prevCluster = sortedHorizontalClusters[prevClusterIdx];
-          const prevClusterY = clusterYPositions.get(prevClusterIdx) || clusterStartY;
-          
-          prevCluster.forEach((prevProduct, prevIdx) => {
-            const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
-            connectedProductIds.forEach(connectedProductId => {
-              const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
-              if (currentIdx !== -1) {
-                const clusterSpan = 1; // Always connecting to immediate previous cluster
-                connectors.push({ 
-                  fromIdx: prevIdx, 
-                  toIdx: currentIdx, 
-                  targetClusterIdx: prevClusterIdx, 
-                  clusterSpan,
-                  fromY: prevClusterY
-                });
-              }
+          // Look through all previous clusters to find ones with declared connections
+          for (let prevPos = 0; prevPos < currentPosition; prevPos++) {
+            const prevClusterIdx = verticalCluster[prevPos];
+            const prevCluster = sortedHorizontalClusters[prevClusterIdx];
+            const prevClusterY = clusterYPositions.get(prevClusterIdx) || clusterStartY;
+            
+            // Check if any product in previous cluster connects to current cluster
+            prevCluster.forEach((prevProduct, prevIdx) => {
+              const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
+              connectedProductIds.forEach(connectedProductId => {
+                const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
+                if (currentIdx !== -1) {
+                  // Only add if we haven't already added a connector for this current product
+                  const alreadyConnected = connectors.some(c => c.toIdx === currentIdx);
+                  if (!alreadyConnected) {
+                    const clusterSpan = currentPosition - prevPos;
+                    connectors.push({ 
+                      fromIdx: prevIdx, 
+                      toIdx: currentIdx, 
+                      targetClusterIdx: prevClusterIdx, 
+                      clusterSpan,
+                      fromY: prevClusterY
+                    });
+                  }
+                }
+              });
             });
-          });
+          }
         }
         
         // Draw vertical connectors
@@ -681,28 +687,33 @@ function App() {
               const isFirst = positionInVertical === 0;
               const offset = clusterOffsets.get(horizontalClusterIdx) || 0;
               
-              // Calculate vertical connectors for this cluster
-              // Only connect to immediately previous cluster for continuous chain
+              // Calculate vertical connectors - connect to any previous cluster with a declared connection
               const connectors: Array<{fromIdx: number, toIdx: number, targetClusterIdx: number, clusterSpan: number}> = [];
               if (!isFirst) {
                 const currentPosition = positionInVertical;
                 const currentCluster = sortedHorizontalClusters[horizontalClusterIdx];
                 
-                // Only check the immediately previous cluster in this vertical group
-                const prevPos = currentPosition - 1;
-                const prevClusterIdx = verticalCluster[prevPos];
-                const prevCluster = sortedHorizontalClusters[prevClusterIdx];
-                
-                prevCluster.forEach((prevProduct, prevIdx) => {
-                  const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
-                  connectedProductIds.forEach(connectedProductId => {
-                    const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
-                    if (currentIdx !== -1) {
-                      const clusterSpan = 1; // Always connecting to immediate previous cluster
-                      connectors.push({ fromIdx: prevIdx, toIdx: currentIdx, targetClusterIdx: prevClusterIdx, clusterSpan });
-                    }
+                // Look through all previous clusters to find ones with declared connections
+                for (let prevPos = 0; prevPos < currentPosition; prevPos++) {
+                  const prevClusterIdx = verticalCluster[prevPos];
+                  const prevCluster = sortedHorizontalClusters[prevClusterIdx];
+                  
+                  // Check if any product in previous cluster connects to current cluster
+                  prevCluster.forEach((prevProduct, prevIdx) => {
+                    const connectedProductIds = verticalConnectionMap.get(prevProduct.id) || [];
+                    connectedProductIds.forEach(connectedProductId => {
+                      const currentIdx = currentCluster.findIndex(p => p.id === connectedProductId);
+                      if (currentIdx !== -1) {
+                        // Only add if we haven't already added a connector for this current product
+                        const alreadyConnected = connectors.some(c => c.toIdx === currentIdx);
+                        if (!alreadyConnected) {
+                          const clusterSpan = currentPosition - prevPos;
+                          connectors.push({ fromIdx: prevIdx, toIdx: currentIdx, targetClusterIdx: prevClusterIdx, clusterSpan });
+                        }
+                      }
+                    });
                   });
-                });
+                }
               }
               
               return (

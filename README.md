@@ -2,7 +2,7 @@
 
 A React + TypeScript application that visualizes grocery products in 2D space, showing dynamic relationships between products based on configurable relationship pairs.
 
-![Product Relationship Grid](https://github.com/user-attachments/assets/300f74ba-99a5-41b9-81fe-0105760dc344)
+![Product Relationship Grid](https://github.com/user-attachments/assets/82338cf5-c16a-4405-b25f-7463e40bd9e4)
 
 ## Overview
 
@@ -15,6 +15,7 @@ This visualization tool renders connected grocery products in a spatial layout w
 - **Dynamic Cluster Formation**: Products are grouped using relationship pairs through a Union-Find algorithm
 - **Horizontal Clustering**: Products are organized horizontally within clusters based on horizontal pairs
 - **Vertical Clustering**: Clusters are organized vertically based on vertical pairs, creating stacked groups
+- **Multiple Super Clusters**: Support for multiple independent cluster groups that are visually separated (e.g., white bread vs wholemeal bread)
 - **Price-Based Ordering**: Products and clusters are sorted by price (most expensive first)
 - **Flexible Relationships**: Supports transitive relationships (e.g., A-B and A-C creates A-B-C cluster)
 - **Visual Connectors**: Vertical relationships are displayed with gradient connector lines between clusters
@@ -78,6 +79,13 @@ Horizontal clusters are organized vertically using another **Union-Find** algori
 2. Clusters linked by vertical pairs are grouped into vertical clusters
 3. Vertical clusters are displayed stacked with connector lines showing relationships
 
+**Super Clusters:**
+Multiple independent super clusters are created when vertical pairs don't connect all horizontal clusters:
+1. Horizontal clusters that are NOT connected by vertical pairs form separate super clusters
+2. Each super cluster is visually separated with increased spacing and dashed borders
+3. Super clusters are labeled for easy identification (Super Cluster 1, Super Cluster 2, etc.)
+4. This allows for completely separate product categories (e.g., white bread vs wholemeal bread vs dairy)
+
 ### Ordering Logic
 1. **Within Clusters**: Products are sorted by price (descending - most expensive first)
    - Uses BFS traversal starting from the most expensive product
@@ -101,38 +109,53 @@ Horizontal clusters are organized vertically using another **Union-Find** algori
 
 ## Example Data
 
-The application includes sample data demonstrating:
-- **Cluster 1**: Morning Crunch Cereal products (Family Size $6.49, Regular $4.29)
-- **Cluster 2**: Citrus Grove Orange Juice (Large $5.99, Small $3.49)
-- **Cluster 3**: Happy Farms Milk products (Gallon $4.99, Half Gallon $2.79, Quart $1.49)
-- **Cluster 4**: Baker's Choice Bread (Whole Grain $3.49, Sandwich $2.29)
+The application includes sample data demonstrating **three separate super clusters**:
+
+### Super Cluster 1: Dairy Products
+- Cheddar Cheese (400g $3.99, 200g $2.20)
+- Greek Yogurt (500g $2.75, 170g $1.20)
+- Organic Milk (2L $2.50, 1L $1.45)
+
+### Super Cluster 2: Wholemeal Bread
+- Allinson Wholemeal (800g $1.65, 400g $1.05)
+- Hovis Wholemeal (800g $1.55, 400g $0.95)
+- Tesco Wholemeal (800g $1.25, 400g $0.75)
+
+### Super Cluster 3: White Bread
+- Allinson White (800g $1.45, 400g $0.95)
+- Hovis White (800g $1.35, 400g $0.85)
+- Tesco White (800g $1.10, 400g $0.65)
 
 ### Relationship Structure
+
+Each super cluster demonstrates:
+- **Horizontal relationships** connecting pack sizes within the same brand/product type
+- **Vertical relationships** connecting different brands/product types within the super cluster
+
 ```typescript
-// Horizontal relationships define clusters
+// Example: Wholemeal Bread Super Cluster
+// Horizontal relationships (pack sizes)
 horizontalPairs: [
-  ["C", "B"], ["B", "A"],  // Milk: Quart → Half Gallon → Gallon
-  ["E", "D"],              // Bread: Sandwich → Whole Grain
-  ["G", "F"],              // OJ: Small → Large
-  ["I", "H"]               // Cereal: Regular → Family Size
+  ["H", "G"],  // Hovis: 400g → 800g
+  ["J", "I"],  // Tesco: 400g → 800g
+  ["L", "K"]   // Allinson: 400g → 800g
 ]
 
-// Vertical relationships link clusters
+// Vertical relationships (brands - 800g products)
 verticalPairs: [
-  ["A", "D"],  // Milk → Bread (links vertically)
-  ["D", "F"],  // Bread → OJ (links vertically)
-  ["F", "H"]   // OJ → Cereal (links vertically)
+  ["G", "I"],  // Hovis 800g → Tesco 800g
+  ["I", "K"]   // Tesco 800g → Allinson 800g
 ]
 
-// This creates one vertical cluster with all four horizontal clusters stacked:
-// Cereal (H-I)
+// This creates one super cluster with three brands vertically connected:
+// Allinson 800g — 400g
 //     |
-// OJ (F-G)
+// Tesco 800g — 400g
 //     |
-// Bread (D-E)
-//     |
-// Milk (A-B-C)
+// Hovis 800g — 400g
 ```
+
+The three super clusters (Dairy, Wholemeal Bread, White Bread) are completely independent and visually separated with space and borders.
 
 ## Getting Started
 

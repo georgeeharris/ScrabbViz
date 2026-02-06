@@ -248,6 +248,12 @@ function App() {
   
   const verticalConnectionMap = buildVerticalConnectionMap();
 
+  // Card sizing constants used for layout calculations
+  const CARD_WIDTH = 200; // Approximate card width including padding
+  const CARD_GAP = 20; // Gap between cards in horizontal cluster
+  const CONNECTOR_WIDTH = 40; // Width of horizontal connector line
+  const MIN_VERTICAL_CONNECTOR_WIDTH = 3; // Minimum width for vertical connectors
+
   // Create render data with prime-based coloring using clusters
   const renderStructure = sortedHorizontalClusters.map((clusterItems, clusterIdx) => {
     // Use cluster index for label
@@ -265,9 +271,6 @@ function App() {
   // Calculate horizontal offsets for each cluster based on vertical connections
   const calculateClusterOffsets = (): Map<number, number> => {
     const offsets = new Map<number, number>();
-    const CARD_WIDTH = 200; // Approximate card width with padding
-    const CARD_GAP = 20; // Gap between cards
-    const CONNECTOR_WIDTH = 40; // Width of horizontal connector
     
     verticalClusters.forEach(verticalCluster => {
       if (verticalCluster.length === 0) return;
@@ -407,9 +410,6 @@ function App() {
                       marginLeft: `${Math.max(0, offset)}px`
                     }}>
                       {connectors.map((conn, connIdx) => {
-                        const CARD_WIDTH = 200;
-                        const CARD_GAP = 20;
-                        const CONNECTOR_WIDTH = 40;
                         const prevOffset = clusterOffsets.get(verticalCluster[positionInVertical - 1]) || 0;
                         const fromX = prevOffset - offset + conn.fromIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
                         const toX = conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
@@ -421,7 +421,7 @@ function App() {
                               position: 'absolute',
                               left: `${Math.min(fromX, toX)}px`,
                               top: '0',
-                              width: `${Math.abs(fromX - toX) || 3}px`,
+                              width: `${Math.abs(fromX - toX) || MIN_VERTICAL_CONNECTOR_WIDTH}px`,
                               height: '30px',
                               background: 'black',
                               borderRadius: '2px'
@@ -457,6 +457,7 @@ function App() {
                                   onMouseEnter={() => setHoverIdx(cardIdx)}
                                   onMouseLeave={() => setHoverIdx(-1)}
                                   style={{
+                                    width: `${CARD_WIDTH}px`,
                                     padding: '12px 20px',
                                     background: isHovered 
                                       ? `linear-gradient(${145 + itmIdx * 15}deg, ${bgColor}, white)` 
@@ -476,7 +477,10 @@ function App() {
                                     fontSize: '14px',
                                     fontWeight: 600,
                                     color: '#1f2937',
-                                    whiteSpace: 'nowrap'
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    boxSizing: 'border-box'
                                   }}
                                 >
                                   {itm.product} (${itm.price.toFixed(2)})

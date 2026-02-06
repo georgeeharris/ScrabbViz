@@ -285,6 +285,7 @@ function App() {
   const CARD_GAP = 20; // Gap between cards in horizontal cluster
   const CONNECTOR_WIDTH = 40; // Width of horizontal connector line
   const MIN_VERTICAL_CONNECTOR_WIDTH = 3; // Minimum width for vertical connectors
+  const BASE_VERTICAL_CONNECTOR_HEIGHT = 30; // Base height for vertical connector
   const VERTICAL_CONNECTOR_SPACING = 8; // Vertical spacing between multiple connectors
 
   // Create render data with prime-based coloring using clusters
@@ -455,7 +456,7 @@ function App() {
                   {!isFirst && connectors.length > 0 && (
                     <div style={{
                       position: 'relative',
-                      height: `${30 + (connectors.length - 1) * VERTICAL_CONNECTOR_SPACING}px`,
+                      height: `${BASE_VERTICAL_CONNECTOR_HEIGHT + (connectors.length - 1) * VERTICAL_CONNECTOR_SPACING}px`,
                       marginLeft: `${Math.max(0, offset)}px`
                     }}>
                       {connectors.map((conn, connIdx) => {
@@ -471,7 +472,7 @@ function App() {
                               left: `${Math.min(fromX, toX)}px`,
                               top: `${connIdx * VERTICAL_CONNECTOR_SPACING}px`,
                               width: `${Math.abs(fromX - toX) || MIN_VERTICAL_CONNECTOR_WIDTH}px`,
-                              height: '30px',
+                              height: `${BASE_VERTICAL_CONNECTOR_HEIGHT}px`,
                               background: 'black',
                               borderRadius: '2px'
                             }}

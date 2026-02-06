@@ -326,12 +326,13 @@ function App() {
                   >
                     <div style={{
                       display: 'flex',
-                      gap: '0px',
+                      gap: 0,
                       alignItems: 'center',
                       flexWrap: 'nowrap'
                     }}>
                       {struct.itemsForMfg.map((itm, itmIdx) => {
                         const isNotLast = itmIdx < struct.itemsForMfg.length - 1;
+                        const CONNECTOR_OVERLAP = 20; // Overlap with adjacent cards
                         return (
                           <div key={itmIdx} style={{ display: 'flex', alignItems: 'center' }}>
                             {(() => {
@@ -341,7 +342,6 @@ function App() {
                               
                               return (
                                 <div
-                                  key={itmIdx}
                                   onMouseEnter={() => setHoverIdx(cardIdx)}
                                   onMouseLeave={() => setHoverIdx(-1)}
                                   style={{
@@ -432,7 +432,7 @@ function App() {
                                 width: '40px',
                                 height: '4px',
                                 background: 'black',
-                                margin: '0 -20px',
+                                margin: `0 -${CONNECTOR_OVERLAP}px`,
                                 zIndex: 0
                               }} />
                             )}

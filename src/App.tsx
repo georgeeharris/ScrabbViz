@@ -91,7 +91,7 @@ const SCROLL_SENSITIVITY = 1000; // Mouse wheel scroll sensitivity
 
 function App() {
   const [showPerformanceOverlay, setShowPerformanceOverlay] = useState<boolean>(true);
-  const [useTestData, setUseTestData] = useState<boolean>(false);
+  const [useTestData, setUseTestData] = useState<boolean>(true);
   const [lastRenderTime, setLastRenderTime] = useState<TimingResult[]>([]);
   
   // Pan and zoom state
@@ -100,38 +100,37 @@ function App() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Test data: Complex relationship scenario
-  // Demonstrates the algorithm's ability to handle complex relationships:
+  // Test data: Complex relationship scenario with long-distance connections
+  // Demonstrates visual handling of connections crossing multiple clusters:
   // 
-  // Scenario: Three horizontal clusters (abc, def, xyz)
-  // - Strong chain: a-d-x (spans all three clusters with 2 connections)
-  // - Weak connection: a-e (only connects two clusters with 1 connection)
+  // SIMPLE EXAMPLE - Non-overlapping connections:
+  // - a-f: Connects cluster ABC to cluster DEF (adjacent, span=1)
+  // - d-z: Connects cluster DEF to cluster XYZ (adjacent, span=1)
   // 
-  // Expected behavior:
-  // 1. The algorithm identifies that cluster DEF (containing d) has 2 connections (to a and x)
-  // 2. Cluster ABC (containing a) has 2 connections (to d and e)
-  // 3. Cluster XYZ (containing x) has 1 connection (to d)
-  // 4. Starting from highest-connected cluster, builds order by following strongest chains
-  // 5. The a-d-x chain is prioritized over the standalone a-e connection
-  // 6. Result: Clusters arranged to showcase the strong vertical chain
-  //
-  // This validates that single-cluster connections (like a-e) don't disrupt the 
-  // positioning determined by multi-cluster chains (like a-d-x).
+  // COMPLEX EXAMPLE - Long-distance crossings:
+  // - a-e: Connects within two adjacent clusters (span=1)
+  // - a-f: Connects within two adjacent clusters (span=1)
+  // - f-y: Connects cluster DEF to cluster XYZ, crossing over ABC (span=2+)
+  // 
+  // Visual treatment:
+  // - Lines with span=1 (adjacent clusters): Solid black lines
+  // - Lines with span>1 (crossing clusters): Dashed lines with rounded style to indicate 
+  //   they are passing "behind" intermediate clusters without connecting to them
   const testData: TGrocery[] = [
     // Cluster ABC - Brand Alpha products
-    { id: "a", product: "Alpha Large", price: 9.99, packSize: "1kg", brand: "Alpha" },
-    { id: "b", product: "Alpha Medium", price: 6.99, packSize: "500g", brand: "Alpha" },
-    { id: "c", product: "Alpha Small", price: 3.99, packSize: "250g", brand: "Alpha" },
+    { id: "a", product: "A", price: 9.99, packSize: "1kg", brand: "Alpha" },
+    { id: "b", product: "B", price: 6.99, packSize: "500g", brand: "Alpha" },
+    { id: "c", product: "C", price: 3.99, packSize: "250g", brand: "Alpha" },
     
     // Cluster DEF - Brand Beta products
-    { id: "d", product: "Beta Large", price: 8.99, packSize: "1kg", brand: "Beta" },
-    { id: "e", product: "Beta Medium", price: 5.99, packSize: "500g", brand: "Beta" },
-    { id: "f", product: "Beta Small", price: 2.99, packSize: "250g", brand: "Beta" },
+    { id: "d", product: "D", price: 8.99, packSize: "1kg", brand: "Beta" },
+    { id: "e", product: "E", price: 5.99, packSize: "500g", brand: "Beta" },
+    { id: "f", product: "F", price: 2.99, packSize: "250g", brand: "Beta" },
     
     // Cluster XYZ - Brand Gamma products
-    { id: "x", product: "Gamma Large", price: 7.99, packSize: "1kg", brand: "Gamma" },
-    { id: "y", product: "Gamma Medium", price: 4.99, packSize: "500g", brand: "Gamma" },
-    { id: "z", product: "Gamma Small", price: 1.99, packSize: "250g", brand: "Gamma" },
+    { id: "x", product: "X", price: 7.99, packSize: "1kg", brand: "Gamma" },
+    { id: "y", product: "Y", price: 4.99, packSize: "500g", brand: "Gamma" },
+    { id: "z", product: "Z", price: 1.99, packSize: "250g", brand: "Gamma" },
   ];
 
   // Horizontal pairs - create three distinct horizontal clusters
@@ -141,14 +140,20 @@ function App() {
     ["y", "x"], ["z", "y"], // Cluster XYZ: z-y-x
   ];
 
-  // Vertical pairs - demonstrate complex relationship chains
-  // Strong chain: a-d-x (connects all three clusters)
-  // Weak chain: a-e (only connects two clusters)
-  // The algorithm should prioritize the a-d-x chain for ordering
+  // Vertical pairs - demonstrate different connection patterns
+  // Toggle between simple and complex examples by commenting/uncommenting
+  
+  // SIMPLE EXAMPLE: Non-overlapping connections (no shared products)
+  // const testVerticalPairs: TProductPair[] = [
+  //   ["a", "f"],  // ABC to DEF (adjacent)
+  //   ["d", "z"],  // DEF to XYZ (adjacent)
+  // ];
+
+  // COMPLEX EXAMPLE: Mixed with long-distance crossing
   const testVerticalPairs: TProductPair[] = [
-    ["a", "d"], // Alpha Large to Beta Large (chain link 1)
-    ["d", "x"], // Beta Large to Gamma Large (chain link 2)
-    ["a", "e"], // Alpha Large to Beta Medium (weaker connection)
+    ["a", "e"],  // ABC to DEF (adjacent, span=1)
+    ["a", "f"],  // ABC to DEF (adjacent, span=1) 
+    ["f", "y"],  // DEF to XYZ crossing over ABC (long-distance, span=2)
   ];
 
   // Sample data with 3 separate super clusters
@@ -366,22 +371,56 @@ function App() {
     return connectionCounts;
   };
 
+  // Calculate the total crossing cost for a given ordering of clusters
+  // Returns the sum of all connection spans (distance between connected clusters)
+  const calculateCrossingCost = (
+    ordering: number[], 
+    productToClusterIdx: Map<string, number>
+  ): number => {
+    let totalCost = 0;
+    
+    // Create position map for this ordering
+    const positionMap = new Map<number, number>();
+    ordering.forEach((clusterIdx, position) => {
+      positionMap.set(clusterIdx, position);
+    });
+    
+    // Calculate span for each connection
+    verticalPairs.forEach(([productA, productB]) => {
+      const clusterIdxA = productToClusterIdx.get(productA);
+      const clusterIdxB = productToClusterIdx.get(productB);
+      
+      if (clusterIdxA !== undefined && clusterIdxB !== undefined) {
+        const posA = positionMap.get(clusterIdxA);
+        const posB = positionMap.get(clusterIdxB);
+        
+        if (posA !== undefined && posB !== undefined) {
+          const span = Math.abs(posA - posB);
+          // Weight the cost: connections spanning multiple clusters are heavily penalized
+          totalCost += span > 1 ? span * span : span;
+        }
+      }
+    });
+    
+    return totalCost;
+  };
+
   // Build vertical cluster groupings based on verticalPairs
   // This groups horizontal clusters that should be displayed vertically together
   // 
-  // Enhanced with intelligent ordering based on relationship chain strength:
-  // 1. Analyzes all vertical pair connections to determine chain weights
-  // 2. Orders clusters within each vertical group by following strongest connections
-  // 3. Starts from the cluster with most total connections
-  // 4. Greedily adds the next unvisited cluster with strongest connection to any visited cluster
-  // 5. Implements deterministic tie-breaking using alphabetical order of first product IDs
+  // Enhanced with CROSSING MINIMIZATION:
+  // 1. Groups clusters that are connected via vertical pairs
+  // 2. For each group, tries different orderings to minimize connection spans
+  // 3. Chooses the ordering that minimizes total "crossing cost"
+  // 4. Crossing cost = sum of all connection spans, with multi-cluster spans heavily weighted
   // 
-  // Example: Given clusters ABC, DEF, XYZ with relationships:
-  //   - a-d (1 connection), d-x (1 connection) = strong chain spanning all three
-  //   - a-e (1 connection) = weak chain connecting only two
-  // Result: Orders as DEF, ABC, XYZ (or similar) following the strongest chain
+  // Example: Given clusters ABC, DEF, XYZ with connections a-e, a-f, f-y:
+  //   - Order ABC, DEF, XYZ → f-y spans 2 (crosses ABC) = cost 4
+  //   - Order ABC, XYZ, DEF → a-e, a-f span 2 (cross XYZ) = cost 8
+  //   - Order DEF, ABC, XYZ → all connections span 1 = cost 3 ✓ OPTIMAL
+  // Result: Orders as DEF, ABC, XYZ to minimize crossings
   //
-  // Deterministic behavior ensures consistent rendering across multiple draws.
+  // For small groups (≤6), tries all permutations. For larger groups, uses greedy heuristic.
   const buildVerticalClusters = (): number[][] => {
     if (verticalPairs.length === 0) {
       // No vertical pairs - each horizontal cluster is its own vertical group
@@ -424,7 +463,7 @@ function App() {
     // Convert to array
     const verticalClusters = Array.from(verticalClusterMap.values());
     
-    // Sort each vertical cluster based on relationship chain strength
+    // Optimize cluster ordering within each vertical group to minimize crossings
     verticalClusters.forEach(group => {
       if (group.length <= 1) return;
       
@@ -450,71 +489,99 @@ function App() {
         });
       });
       
-      // Find the cluster with the most connections to start ordering
-      let maxConnections = 0;
-      let startCluster = group[0];
-      group.forEach(clusterIdx => {
-        const connections = groupConnections.get(clusterIdx)!;
-        const totalWeight = Array.from(connections.values()).reduce((sum, w) => sum + w, 0);
-        if (totalWeight > maxConnections) {
-          maxConnections = totalWeight;
-          startCluster = clusterIdx;
-        } else if (totalWeight === maxConnections) {
-          // Deterministic tie-breaking: use cluster with lowest first product ID alphabetically
-          const currentFirstProduct = sortedHorizontalClusters[clusterIdx][0]?.id || '';
-          const startFirstProduct = sortedHorizontalClusters[startCluster][0]?.id || '';
-          if (currentFirstProduct.localeCompare(startFirstProduct) < 0) {
-            startCluster = clusterIdx;
-          }
-        }
-      });
+      let bestOrdering: number[] = [...group];
       
-      // Build ordering by following strongest connections
-      const ordered: number[] = [startCluster];
-      const visited = new Set<number>([startCluster]);
-      
-      while (ordered.length < group.length) {
-        let nextCluster = -1;
-        let maxWeight = 0;
+      // For small groups, try all permutations to find optimal ordering
+      if (group.length <= 6) {
+        // Generate all permutations and find the one with minimum crossing cost
+        const permutations: number[][] = [];
         
-        // Find the unvisited cluster with the strongest connection to any visited cluster
-        ordered.forEach(visitedCluster => {
-          const connections = groupConnections.get(visitedCluster)!;
-          connections.forEach((weight, targetCluster) => {
-            if (!visited.has(targetCluster)) {
-              if (weight > maxWeight) {
-                maxWeight = weight;
-                nextCluster = targetCluster;
-              } else if (weight === maxWeight && nextCluster !== -1) {
-                // Deterministic tie-breaking: prefer cluster with lower first product ID
-                const nextFirstProduct = sortedHorizontalClusters[targetCluster][0]?.id || '';
-                const currentNextFirstProduct = sortedHorizontalClusters[nextCluster][0]?.id || '';
-                if (nextFirstProduct.localeCompare(currentNextFirstProduct) < 0) {
-                  nextCluster = targetCluster;
-                }
-              }
-            }
-          });
+        const generatePermutations = (arr: number[], start = 0) => {
+          if (start === arr.length - 1) {
+            permutations.push([...arr]);
+            return;
+          }
+          for (let i = start; i < arr.length; i++) {
+            [arr[start], arr[i]] = [arr[i], arr[start]];
+            generatePermutations(arr, start + 1);
+            [arr[start], arr[i]] = [arr[i], arr[start]];
+          }
+        };
+        
+        generatePermutations([...group]);
+        
+        let minCost = Infinity;
+        permutations.forEach(ordering => {
+          const cost = calculateCrossingCost(ordering, productToClusterIdx);
+          if (cost < minCost) {
+            minCost = cost;
+            bestOrdering = ordering;
+          }
         });
         
-        if (nextCluster === -1) {
-          // No connected cluster found, add remaining clusters alphabetically
-          const remaining = group.filter(c => !visited.has(c));
-          remaining.sort((a, b) => {
-            const aFirstProduct = sortedHorizontalClusters[a][0]?.id || '';
-            const bFirstProduct = sortedHorizontalClusters[b][0]?.id || '';
-            return aFirstProduct.localeCompare(bFirstProduct);
+        if (import.meta.env.DEV) {
+          const clusterNames = bestOrdering.map(idx => {
+            const firstProduct = sortedHorizontalClusters[idx][0]?.id || idx;
+            return `Cluster ${idx} (${firstProduct})`;
+          }).join(' → ');
+          console.log(`✓ Optimized ordering: ${clusterNames} (cost: ${minCost})`);
+        }
+      } else {
+        // For larger groups, use greedy heuristic: start from most connected, add neighbors
+        const ordered: number[] = [];
+        const visited = new Set<number>();
+        
+        // Find the cluster with the most connections
+        let maxConnections = 0;
+        let startCluster = group[0];
+        group.forEach(clusterIdx => {
+          const connections = groupConnections.get(clusterIdx)!;
+          const totalWeight = Array.from(connections.values()).reduce((sum, w) => sum + w, 0);
+          if (totalWeight > maxConnections) {
+            maxConnections = totalWeight;
+            startCluster = clusterIdx;
+          }
+        });
+        
+        ordered.push(startCluster);
+        visited.add(startCluster);
+        
+        while (ordered.length < group.length) {
+          let nextCluster = -1;
+          let maxWeight = 0;
+          
+          // Find the unvisited cluster with the strongest connection to any visited cluster
+          ordered.forEach(visitedCluster => {
+            const connections = groupConnections.get(visitedCluster)!;
+            connections.forEach((weight, targetCluster) => {
+              if (!visited.has(targetCluster) && weight > maxWeight) {
+                maxWeight = weight;
+                nextCluster = targetCluster;
+              }
+            });
           });
-          ordered.push(...remaining);
-          break;
+          
+          if (nextCluster === -1) {
+            // No connected cluster found, add remaining alphabetically
+            const remaining = group.filter(c => !visited.has(c));
+            remaining.sort((a, b) => {
+              const aFirstProduct = sortedHorizontalClusters[a][0]?.id || '';
+              const bFirstProduct = sortedHorizontalClusters[b][0]?.id || '';
+              return aFirstProduct.localeCompare(bFirstProduct);
+            });
+            ordered.push(...remaining);
+            break;
+          }
+          
+          ordered.push(nextCluster);
+          visited.add(nextCluster);
         }
         
-        ordered.push(nextCluster);
-        visited.add(nextCluster);
+        bestOrdering = ordered;
       }
       
-      // Replace the group with the ordered version
-      group.splice(0, group.length, ...ordered);
+      // Replace the group with the optimized ordering
+      group.splice(0, group.length, ...bestOrdering);
     });
     
     // Sort vertical clusters by the index of their first horizontal cluster
@@ -704,20 +771,29 @@ function App() {
     );
     
     elements.push(
-      <rect key="legend1-bg" x={SVG_WIDTH / 2 - 250} y="60" width="240" height="40" rx="20" fill="hsl(210, 70%, 50%)" />
+      <rect key="legend1-bg" x={SVG_WIDTH / 2 - 370} y="60" width="240" height="40" rx="20" fill="hsl(210, 70%, 50%)" />
     );
     elements.push(
-      <text key="legend1" x={SVG_WIDTH / 2 - 130} y="85" textAnchor="middle" fontSize="17" fontWeight="700" fill="white">
+      <text key="legend1" x={SVG_WIDTH / 2 - 250} y="85" textAnchor="middle" fontSize="17" fontWeight="700" fill="white">
         ⟷ Horizontal: Product Relationships
       </text>
     );
     
     elements.push(
-      <rect key="legend2-bg" x={SVG_WIDTH / 2 + 10} y="60" width="240" height="40" rx="20" fill="hsl(340, 70%, 50%)" />
+      <rect key="legend2-bg" x={SVG_WIDTH / 2 - 120} y="60" width="240" height="40" rx="20" fill="hsl(340, 70%, 50%)" />
     );
     elements.push(
-      <text key="legend2" x={SVG_WIDTH / 2 + 130} y="85" textAnchor="middle" fontSize="17" fontWeight="700" fill="white">
+      <text key="legend2" x={SVG_WIDTH / 2} y="85" textAnchor="middle" fontSize="17" fontWeight="700" fill="white">
         ↕ Vertical: Cluster Organization
+      </text>
+    );
+    
+    elements.push(
+      <rect key="legend3-bg" x={SVG_WIDTH / 2 + 130} y="60" width="240" height="40" rx="20" fill="#ff6b6b" />
+    );
+    elements.push(
+      <text key="legend3" x={SVG_WIDTH / 2 + 250} y="85" textAnchor="middle" fontSize="17" fontWeight="700" fill="white">
+        🚀 Long-Distance Connections
       </text>
     );
     
@@ -725,6 +801,11 @@ function App() {
 
     // Track Y positions of each cluster for vertical connectors
     const clusterYPositions = new Map<number, number>();
+    
+    // Separate arrays for different element types to control rendering order
+    const verticalConnectorElements: React.JSX.Element[] = [];
+    const horizontalConnectorElements: React.JSX.Element[] = [];
+    const cardElements: React.JSX.Element[] = [];
 
     verticalClusters.forEach((verticalCluster, verticalIdx) => {
       // Super cluster label
@@ -803,7 +884,8 @@ function App() {
           }
         }
         
-        // Draw vertical connectors
+        // Collect vertical connectors (to be drawn first)
+        // Lines crossing multiple clusters (span > 1) are styled differently to show they pass "behind"
         if (!isFirst && connectors.length > 0) {
           connectors.forEach((conn, connIdx) => {
             const prevOffset = clusterOffsets.get(conn.sourceClusterIdx) || 0;
@@ -811,28 +893,74 @@ function App() {
             const toX = SVG_PADDING + Math.max(0, offset) + conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
             const horizontalOffset = connIdx * HORIZONTAL_CONNECTOR_OFFSET;
             
-            elements.push(
+            // Determine if this is a long-distance connection crossing intermediate clusters
+            const isLongDistance = conn.clusterSpan > 1;
+            
+            // Style based on connection distance
+            const strokeColor = isLongDistance ? "#ff6b6b" : "black";
+            const strokeWidth = isLongDistance ? 4 : 3;
+            const strokeDasharray = isLongDistance ? "10,5" : undefined;
+            const opacity = isLongDistance ? 0.7 : 1;
+            
+            verticalConnectorElements.push(
               <line
                 key={`vconn-${horizontalClusterIdx}-${connIdx}`}
                 x1={fromX + horizontalOffset}
                 y1={conn.fromY}
                 x2={toX + horizontalOffset}
                 y2={currentY + 30}
-                stroke="black"
-                strokeWidth="3"
+                stroke={strokeColor}
+                strokeWidth={strokeWidth}
+                strokeDasharray={strokeDasharray}
+                opacity={opacity}
+                strokeLinecap="round"
               />
             );
+            
+            // Add a visual indicator label for long-distance connections
+            if (isLongDistance) {
+              const midX = (fromX + toX) / 2 + horizontalOffset;
+              const midY = (conn.fromY + currentY + 30) / 2;
+              
+              // Add a small circle badge at the midpoint
+              verticalConnectorElements.push(
+                <circle
+                  key={`vconn-badge-${horizontalClusterIdx}-${connIdx}`}
+                  cx={midX}
+                  cy={midY}
+                  r={15}
+                  fill="white"
+                  stroke="#ff6b6b"
+                  strokeWidth="2"
+                />
+              );
+              
+              // Add text showing the span distance
+              verticalConnectorElements.push(
+                <text
+                  key={`vconn-label-${horizontalClusterIdx}-${connIdx}`}
+                  x={midX}
+                  y={midY + 5}
+                  textAnchor="middle"
+                  fontSize="11"
+                  fontWeight="bold"
+                  fill="#ff6b6b"
+                >
+                  {conn.clusterSpan}
+                </text>
+              );
+            }
           });
         }
         
-        // Draw horizontal connectors (before cards so they appear behind)
+        // Collect horizontal connectors (to be drawn second)
         struct.itemsForMfg.forEach((_itm, itmIdx) => {
           if (itmIdx < struct.itemsForMfg.length - 1) {
             const cardX = SVG_PADDING + Math.max(0, offset) + itmIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH);
             const cardY = currentY;
             const cardIdx = svgGlobalIdx + itmIdx;
             
-            elements.push(
+            horizontalConnectorElements.push(
               <line
                 key={`hconn-${cardIdx}`}
                 x1={cardX + CARD_WIDTH}
@@ -846,7 +974,7 @@ function App() {
           }
         });
         
-        // Draw cluster products
+        // Collect card elements (to be drawn last, on top)
         struct.itemsForMfg.forEach((itm, itmIdx) => {
           const cardX = SVG_PADDING + Math.max(0, offset) + itmIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH);
           const cardY = currentY;
@@ -855,7 +983,7 @@ function App() {
           const cardIdx = svgGlobalIdx++;
           
           // Card background - using CSS class for hover effects
-          elements.push(
+          cardElements.push(
             <rect
               key={`card-bg-${cardIdx}`}
               x={cardX}
@@ -877,7 +1005,7 @@ function App() {
           );
           
           // Card text
-          elements.push(
+          cardElements.push(
             <text
               key={`card-text-${cardIdx}`}
               x={cardX + CARD_WIDTH / 2}
@@ -917,6 +1045,9 @@ function App() {
         currentY += SUPER_CLUSTER_SPACING - 40;
       }
     });
+    
+    // Push all connectors and cards in the correct order: vertical connectors, horizontal connectors, then cards
+    elements.push(...verticalConnectorElements, ...horizontalConnectorElements, ...cardElements);
     
     const totalHeight = currentY + 80;
     
@@ -1122,7 +1253,7 @@ function App() {
             onChange={(e) => setUseTestData(e.target.checked)}
             style={{ marginRight: '8px' }}
           />
-          Use Test Data (49 products - 7x7)
+          Use Test Data (3 clusters: ABC, DEF, XYZ)
         </label>
         <label style={{ display: 'block', marginBottom: '10px', cursor: 'pointer' }}>
           <input 

@@ -87,6 +87,12 @@ function App() {
   const [showPerformanceOverlay, setShowPerformanceOverlay] = useState<boolean>(true);
   const [useTestData, setUseTestData] = useState<boolean>(false);
   const [lastRenderTime, setLastRenderTime] = useState<TimingResult[]>([]);
+  
+  // Pan and zoom state
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Test data: 7x7 grid (49 products) - 7 products wide, 7 clusters deep
   const testData: TGrocery[] = Array.from({ length: 49 }, (_, i) => ({
@@ -781,6 +787,50 @@ function App() {
     return Math.min(scaleX, scaleY, 1); // Never scale up, only down
   }, [viewportDimensions, contentWidth, contentHeight]);
 
+  // Pan and zoom handlers
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(prev * 1.2, 5)); // Max zoom 5x
+  };
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(prev / 1.2, 0.1)); // Min zoom 0.1x
+  };
+
+  const handleResetZoom = () => {
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = -e.deltaY / 1000;
+    setZoomLevel(prev => Math.max(0.1, Math.min(5, prev * (1 + delta))));
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 0) { // Left mouse button
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging) {
+      setPanOffset({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
   // Calculate total product count
   const totalProducts = groceryData.length;
   const totalClusters = sortedHorizontalClusters.length;
@@ -807,6 +857,65 @@ function App() {
         minWidth: '250px'
       }}>
         <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', fontWeight: 'bold' }}>Controls</h3>
+        
+        {/* Zoom Controls */}
+        <div style={{ marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e0e0e0' }}>
+          <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Pan & Zoom</div>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+            <button
+              onClick={handleZoomIn}
+              style={{
+                flex: 1,
+                padding: '8px',
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}
+            >
+              🔍+ Zoom In
+            </button>
+            <button
+              onClick={handleZoomOut}
+              style={{
+                flex: 1,
+                padding: '8px',
+                backgroundColor: '#2196F3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}
+            >
+              🔍- Zoom Out
+            </button>
+          </div>
+          <button
+            onClick={handleResetZoom}
+            style={{
+              width: '100%',
+              padding: '8px',
+              backgroundColor: '#FF9800',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600'
+            }}
+          >
+            🔄 Reset View
+          </button>
+          <div style={{ marginTop: '8px', fontSize: '12px', color: '#666', textAlign: 'center' }}>
+            Zoom: {(zoomLevel * 100).toFixed(0)}% | Drag to pan
+          </div>
+        </div>
+        
         <label style={{ display: 'block', marginBottom: '10px', cursor: 'pointer' }}>
           <input 
             type="checkbox" 
@@ -877,12 +986,29 @@ function App() {
       )}
 
       {/* Main SVG Content */}
-      <div style={{
-        transform: `scale(${scale})`,
-        transformOrigin: 'top center',
-        transition: 'transform 0.3s ease-in-out'
-      }}>
-        {svgElement}
+      <div 
+        style={{
+          cursor: isDragging ? 'grabbing' : 'grab',
+          overflow: 'hidden',
+          width: '100%',
+          height: '100vh',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div style={{
+          transform: `scale(${scale * zoomLevel}) translate(${panOffset.x / (scale * zoomLevel)}px, ${panOffset.y / (scale * zoomLevel)}px)`,
+          transformOrigin: 'center center',
+          transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+        }}>
+          {svgElement}
+        </div>
       </div>
     </div>
   );

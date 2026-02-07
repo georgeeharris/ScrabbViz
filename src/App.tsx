@@ -353,6 +353,9 @@ function App() {
         clusterConnections.get(clusterIdxB)!.add(clusterIdxA);
         
         // Count connections between each pair of clusters
+        // Note: We create bidirectional edges in the adjacency list above for graph traversal,
+        // but only count each unique vertical pair once here. The count represents the number
+        // of vertical pairs connecting two clusters, not the number of graph edges.
         const pairKey = clusterIdxA < clusterIdxB 
           ? `${clusterIdxA}-${clusterIdxB}` 
           : `${clusterIdxB}-${clusterIdxA}`;

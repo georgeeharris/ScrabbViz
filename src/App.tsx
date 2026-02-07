@@ -101,10 +101,22 @@ function App() {
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Test data: Complex relationship scenario
-  // Demonstrates: three horizontal clusters (abc, def, xyz) with:
-  // - Strong chain: a-d-x (spans all three clusters) 
-  // - Weak chain: a-e (only two clusters)
-  // The stronger a-d-x chain should dictate cluster ordering
+  // Demonstrates the algorithm's ability to handle complex relationships:
+  // 
+  // Scenario: Three horizontal clusters (abc, def, xyz)
+  // - Strong chain: a-d-x (spans all three clusters with 2 connections)
+  // - Weak connection: a-e (only connects two clusters with 1 connection)
+  // 
+  // Expected behavior:
+  // 1. The algorithm identifies that cluster DEF (containing d) has 2 connections (to a and x)
+  // 2. Cluster ABC (containing a) has 2 connections (to d and e)
+  // 3. Cluster XYZ (containing x) has 1 connection (to d)
+  // 4. Starting from highest-connected cluster, builds order by following strongest chains
+  // 5. The a-d-x chain is prioritized over the standalone a-e connection
+  // 6. Result: Clusters arranged to showcase the strong vertical chain
+  //
+  // This validates that single-cluster connections (like a-e) don't disrupt the 
+  // positioning determined by multi-cluster chains (like a-d-x).
   const testData: TGrocery[] = [
     // Cluster ABC - Brand Alpha products
     { id: "a", product: "Alpha Large", price: 9.99, packSize: "1kg", brand: "Alpha" },
@@ -317,6 +329,9 @@ function App() {
 
   // Analyze relationship chains between horizontal clusters
   // Returns connection weights between clusters for intelligent ordering
+  // 
+  // This function counts the number of vertical pair connections between each pair of clusters.
+  // Higher counts indicate stronger relationships that should influence cluster positioning.
   const analyzeClusterChains = (productToClusterIdx: Map<string, number>): Map<string, number> => {
     // Build adjacency list of cluster connections from vertical pairs
     const clusterConnections = new Map<number, Set<number>>();
@@ -350,7 +365,20 @@ function App() {
 
   // Build vertical cluster groupings based on verticalPairs
   // This groups horizontal clusters that should be displayed vertically together
-  // Now with intelligent ordering based on relationship chain strength
+  // 
+  // Enhanced with intelligent ordering based on relationship chain strength:
+  // 1. Analyzes all vertical pair connections to determine chain weights
+  // 2. Orders clusters within each vertical group by following strongest connections
+  // 3. Starts from the cluster with most total connections
+  // 4. Greedily adds the next unvisited cluster with strongest connection to any visited cluster
+  // 5. Implements deterministic tie-breaking using alphabetical order of first product IDs
+  // 
+  // Example: Given clusters ABC, DEF, XYZ with relationships:
+  //   - a-d (1 connection), d-x (1 connection) = strong chain spanning all three
+  //   - a-e (1 connection) = weak chain connecting only two
+  // Result: Orders as DEF, ABC, XYZ (or similar) following the strongest chain
+  //
+  // Deterministic behavior ensures consistent rendering across multiple draws.
   const buildVerticalClusters = (): number[][] => {
     if (verticalPairs.length === 0) {
       // No vertical pairs - each horizontal cluster is its own vertical group

@@ -825,6 +825,27 @@ function App() {
           });
         }
         
+        // Draw horizontal connectors (before cards so they appear behind)
+        struct.itemsForMfg.forEach((_itm, itmIdx) => {
+          if (itmIdx < struct.itemsForMfg.length - 1) {
+            const cardX = SVG_PADDING + Math.max(0, offset) + itmIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH);
+            const cardY = currentY;
+            const cardIdx = svgGlobalIdx + itmIdx;
+            
+            elements.push(
+              <line
+                key={`hconn-${cardIdx}`}
+                x1={cardX + CARD_WIDTH}
+                y1={cardY + 30}
+                x2={cardX + CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH}
+                y2={cardY + 30}
+                stroke="black"
+                strokeWidth="3"
+              />
+            );
+          }
+        });
+        
         // Draw cluster products
         struct.itemsForMfg.forEach((itm, itmIdx) => {
           const cardX = SVG_PADDING + Math.max(0, offset) + itmIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH);
@@ -870,21 +891,6 @@ function App() {
               {itm.product} (${itm.price.toFixed(2)})
             </text>
           );
-          
-          // Horizontal connector
-          if (itmIdx < struct.itemsForMfg.length - 1) {
-            elements.push(
-              <line
-                key={`hconn-${cardIdx}`}
-                x1={cardX + CARD_WIDTH}
-                y1={cardY + 30}
-                x2={cardX + CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH}
-                y2={cardY + 30}
-                stroke="black"
-                strokeWidth="3"
-              />
-            );
-          }
         });
         
         // Store the Y position of this cluster (center of card) before moving to the next

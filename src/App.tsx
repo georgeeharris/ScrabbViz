@@ -460,7 +460,7 @@ function App() {
           // Deterministic tie-breaking: use cluster with lowest first product ID alphabetically
           const currentFirstProduct = sortedHorizontalClusters[clusterIdx][0]?.id || '';
           const startFirstProduct = sortedHorizontalClusters[startCluster][0]?.id || '';
-          if (currentFirstProduct < startFirstProduct) {
+          if (currentFirstProduct.localeCompare(startFirstProduct) < 0) {
             startCluster = clusterIdx;
           }
         }
@@ -486,7 +486,7 @@ function App() {
                 // Deterministic tie-breaking: prefer cluster with lower first product ID
                 const nextFirstProduct = sortedHorizontalClusters[targetCluster][0]?.id || '';
                 const currentNextFirstProduct = sortedHorizontalClusters[nextCluster][0]?.id || '';
-                if (nextFirstProduct < currentNextFirstProduct) {
+                if (nextFirstProduct.localeCompare(currentNextFirstProduct) < 0) {
                   nextCluster = targetCluster;
                 }
               }

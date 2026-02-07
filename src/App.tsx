@@ -100,27 +100,44 @@ function App() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Test data: 7x7 grid (49 products) - 7 products wide, 7 clusters deep
-  const testData: TGrocery[] = Array.from({ length: 49 }, (_, i) => ({
-    id: `T${i + 1}`,
-    product: `Test Product ${i + 1}`,
-    price: 10 - (i * 0.15), // Descending prices
-    packSize: `${100 + i * 10}g`,
-    brand: `Brand ${Math.floor(i / 7) + 1}`
-  }));
+  // Test data: Complex relationship scenario
+  // Demonstrates: three horizontal clusters (abc, def, xyz) with:
+  // - Strong chain: a-d-x (spans all three clusters) 
+  // - Weak chain: a-e (only two clusters)
+  // The stronger a-d-x chain should dictate cluster ordering
+  const testData: TGrocery[] = [
+    // Cluster ABC - Brand Alpha products
+    { id: "a", product: "Alpha Large", price: 9.99, packSize: "1kg", brand: "Alpha" },
+    { id: "b", product: "Alpha Medium", price: 6.99, packSize: "500g", brand: "Alpha" },
+    { id: "c", product: "Alpha Small", price: 3.99, packSize: "250g", brand: "Alpha" },
+    
+    // Cluster DEF - Brand Beta products
+    { id: "d", product: "Beta Large", price: 8.99, packSize: "1kg", brand: "Beta" },
+    { id: "e", product: "Beta Medium", price: 5.99, packSize: "500g", brand: "Beta" },
+    { id: "f", product: "Beta Small", price: 2.99, packSize: "250g", brand: "Beta" },
+    
+    // Cluster XYZ - Brand Gamma products
+    { id: "x", product: "Gamma Large", price: 7.99, packSize: "1kg", brand: "Gamma" },
+    { id: "y", product: "Gamma Medium", price: 4.99, packSize: "500g", brand: "Gamma" },
+    { id: "z", product: "Gamma Small", price: 1.99, packSize: "250g", brand: "Gamma" },
+  ];
 
-  // Create 7 horizontal clusters (rows) with 7 products each
-  const testHorizontalPairs: TProductPair[] = Array.from({ length: 42 }, (_, i) => {
-    const row = Math.floor(i / 6);
-    const col = i % 6;
-    const productIndex = row * 7 + col + 1;
-    return [`T${productIndex}`, `T${productIndex + 1}`] as TProductPair;
-  });
+  // Horizontal pairs - create three distinct horizontal clusters
+  const testHorizontalPairs: TProductPair[] = [
+    ["b", "a"], ["c", "b"], // Cluster ABC: c-b-a
+    ["e", "d"], ["f", "e"], // Cluster DEF: f-e-d  
+    ["y", "x"], ["z", "y"], // Cluster XYZ: z-y-x
+  ];
 
-  // Create vertical connections between clusters (connect first product of each row)
-  const testVerticalPairs: TProductPair[] = Array.from({ length: 6 }, (_, i) => 
-    [`T${i * 7 + 1}`, `T${(i + 1) * 7 + 1}`] as TProductPair
-  );
+  // Vertical pairs - demonstrate complex relationship chains
+  // Strong chain: a-d-x (connects all three clusters)
+  // Weak chain: a-e (only connects two clusters)
+  // The algorithm should prioritize the a-d-x chain for ordering
+  const testVerticalPairs: TProductPair[] = [
+    ["a", "d"], // Alpha Large to Beta Large (chain link 1)
+    ["d", "x"], // Beta Large to Gamma Large (chain link 2)
+    ["a", "e"], // Alpha Large to Beta Medium (weaker connection)
+  ];
 
   // Sample data with 3 separate super clusters
   const groceryData: TGrocery[] = useTestData ? testData : [
@@ -298,8 +315,42 @@ function App() {
     };
   }, [horizontalPairs, productMap]);
 
+  // Analyze relationship chains between horizontal clusters
+  // Returns connection weights between clusters for intelligent ordering
+  const analyzeClusterChains = (productToClusterIdx: Map<string, number>): Map<string, number> => {
+    // Build adjacency list of cluster connections from vertical pairs
+    const clusterConnections = new Map<number, Set<number>>();
+    const connectionCounts = new Map<string, number>();
+    
+    verticalPairs.forEach(([productA, productB]) => {
+      const clusterIdxA = productToClusterIdx.get(productA);
+      const clusterIdxB = productToClusterIdx.get(productB);
+      
+      if (clusterIdxA !== undefined && clusterIdxB !== undefined && clusterIdxA !== clusterIdxB) {
+        // Add bidirectional edges
+        if (!clusterConnections.has(clusterIdxA)) {
+          clusterConnections.set(clusterIdxA, new Set());
+        }
+        if (!clusterConnections.has(clusterIdxB)) {
+          clusterConnections.set(clusterIdxB, new Set());
+        }
+        clusterConnections.get(clusterIdxA)!.add(clusterIdxB);
+        clusterConnections.get(clusterIdxB)!.add(clusterIdxA);
+        
+        // Count connections between each pair of clusters
+        const pairKey = clusterIdxA < clusterIdxB 
+          ? `${clusterIdxA}-${clusterIdxB}` 
+          : `${clusterIdxB}-${clusterIdxA}`;
+        connectionCounts.set(pairKey, (connectionCounts.get(pairKey) || 0) + 1);
+      }
+    });
+    
+    return connectionCounts;
+  };
+
   // Build vertical cluster groupings based on verticalPairs
   // This groups horizontal clusters that should be displayed vertically together
+  // Now with intelligent ordering based on relationship chain strength
   const buildVerticalClusters = (): number[][] => {
     if (verticalPairs.length === 0) {
       // No vertical pairs - each horizontal cluster is its own vertical group
@@ -313,6 +364,9 @@ function App() {
         productToClusterIdx.set(product.id, idx);
       });
     });
+
+    // Analyze relationship chains
+    const connectionCounts = analyzeClusterChains(productToClusterIdx);
 
     // Build vertical cluster groups using Union-Find on horizontal cluster indices
     const uf = new UnionFind();
@@ -336,9 +390,101 @@ function App() {
       verticalClusterMap.get(root)!.push(idx);
     });
 
-    // Convert to array and sort each vertical cluster by the position of first horizontal cluster
+    // Convert to array
     const verticalClusters = Array.from(verticalClusterMap.values());
-    verticalClusters.forEach(group => group.sort((a, b) => a - b));
+    
+    // Sort each vertical cluster based on relationship chain strength
+    verticalClusters.forEach(group => {
+      if (group.length <= 1) return;
+      
+      // Build a graph for this vertical cluster group
+      const groupConnections = new Map<number, Map<number, number>>();
+      group.forEach(clusterIdx => {
+        groupConnections.set(clusterIdx, new Map());
+      });
+      
+      // Populate connection weights between clusters in this group
+      group.forEach(clusterIdxA => {
+        group.forEach(clusterIdxB => {
+          if (clusterIdxA !== clusterIdxB) {
+            const pairKey = clusterIdxA < clusterIdxB 
+              ? `${clusterIdxA}-${clusterIdxB}` 
+              : `${clusterIdxB}-${clusterIdxA}`;
+            const weight = connectionCounts.get(pairKey) || 0;
+            if (weight > 0) {
+              groupConnections.get(clusterIdxA)!.set(clusterIdxB, weight);
+              groupConnections.get(clusterIdxB)!.set(clusterIdxA, weight);
+            }
+          }
+        });
+      });
+      
+      // Find the cluster with the most connections to start ordering
+      let maxConnections = 0;
+      let startCluster = group[0];
+      group.forEach(clusterIdx => {
+        const connections = groupConnections.get(clusterIdx)!;
+        const totalWeight = Array.from(connections.values()).reduce((sum, w) => sum + w, 0);
+        if (totalWeight > maxConnections) {
+          maxConnections = totalWeight;
+          startCluster = clusterIdx;
+        } else if (totalWeight === maxConnections) {
+          // Deterministic tie-breaking: use cluster with lowest first product ID alphabetically
+          const currentFirstProduct = sortedHorizontalClusters[clusterIdx][0]?.id || '';
+          const startFirstProduct = sortedHorizontalClusters[startCluster][0]?.id || '';
+          if (currentFirstProduct < startFirstProduct) {
+            startCluster = clusterIdx;
+          }
+        }
+      });
+      
+      // Build ordering by following strongest connections
+      const ordered: number[] = [startCluster];
+      const visited = new Set<number>([startCluster]);
+      
+      while (ordered.length < group.length) {
+        let nextCluster = -1;
+        let maxWeight = 0;
+        
+        // Find the unvisited cluster with the strongest connection to any visited cluster
+        ordered.forEach(visitedCluster => {
+          const connections = groupConnections.get(visitedCluster)!;
+          connections.forEach((weight, targetCluster) => {
+            if (!visited.has(targetCluster)) {
+              if (weight > maxWeight) {
+                maxWeight = weight;
+                nextCluster = targetCluster;
+              } else if (weight === maxWeight && nextCluster !== -1) {
+                // Deterministic tie-breaking: prefer cluster with lower first product ID
+                const nextFirstProduct = sortedHorizontalClusters[targetCluster][0]?.id || '';
+                const currentNextFirstProduct = sortedHorizontalClusters[nextCluster][0]?.id || '';
+                if (nextFirstProduct < currentNextFirstProduct) {
+                  nextCluster = targetCluster;
+                }
+              }
+            }
+          });
+        });
+        
+        if (nextCluster === -1) {
+          // No connected cluster found, add remaining clusters alphabetically
+          const remaining = group.filter(c => !visited.has(c));
+          remaining.sort((a, b) => {
+            const aFirstProduct = sortedHorizontalClusters[a][0]?.id || '';
+            const bFirstProduct = sortedHorizontalClusters[b][0]?.id || '';
+            return aFirstProduct.localeCompare(bFirstProduct);
+          });
+          ordered.push(...remaining);
+          break;
+        }
+        
+        ordered.push(nextCluster);
+        visited.add(nextCluster);
+      }
+      
+      // Replace the group with the ordered version
+      group.splice(0, group.length, ...ordered);
+    });
     
     // Sort vertical clusters by the index of their first horizontal cluster
     verticalClusters.sort((a, b) => a[0] - b[0]);

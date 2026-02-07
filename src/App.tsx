@@ -83,13 +83,13 @@ class UnionFind {
 // Prime number generator for unique color hashing
 const primeSequence = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
 
+// Pan and zoom constants
+const ZOOM_STEP = 1.2; // Zoom multiplier for in/out buttons
+const MAX_ZOOM = 5; // Maximum zoom level (500%)
+const MIN_ZOOM = 0.1; // Minimum zoom level (10%)
+const SCROLL_SENSITIVITY = 1000; // Mouse wheel scroll sensitivity
+
 function App() {
-  // Pan and zoom constants
-  const ZOOM_STEP = 1.2; // Zoom multiplier for in/out buttons
-  const MAX_ZOOM = 5; // Maximum zoom level (500%)
-  const MIN_ZOOM = 0.1; // Minimum zoom level (10%)
-  const SCROLL_SENSITIVITY = 1000; // Mouse wheel scroll sensitivity
-  
   const [showPerformanceOverlay, setShowPerformanceOverlay] = useState<boolean>(true);
   const [useTestData, setUseTestData] = useState<boolean>(false);
   const [lastRenderTime, setLastRenderTime] = useState<TimingResult[]>([]);
@@ -839,7 +839,7 @@ function App() {
 
   // Memoize transform calculation for performance
   const contentTransform = useMemo(() => {
-    const combinedScale = scale * zoomLevel;
+    const combinedScale = Math.max(scale * zoomLevel, 0.001); // Ensure minimum scale to prevent division by zero
     const translateX = panOffset.x / combinedScale;
     const translateY = panOffset.y / combinedScale;
     return `scale(${combinedScale}) translate(${translateX}px, ${translateY}px)`;

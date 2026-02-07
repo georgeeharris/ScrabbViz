@@ -84,6 +84,12 @@ class UnionFind {
 const primeSequence = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47];
 
 function App() {
+  // Pan and zoom constants
+  const ZOOM_STEP = 1.2; // Zoom multiplier for in/out buttons
+  const MAX_ZOOM = 5; // Maximum zoom level (500%)
+  const MIN_ZOOM = 0.1; // Minimum zoom level (10%)
+  const SCROLL_SENSITIVITY = 1000; // Mouse wheel scroll sensitivity
+  
   const [showPerformanceOverlay, setShowPerformanceOverlay] = useState<boolean>(true);
   const [useTestData, setUseTestData] = useState<boolean>(false);
   const [lastRenderTime, setLastRenderTime] = useState<TimingResult[]>([]);
@@ -789,11 +795,11 @@ function App() {
 
   // Pan and zoom handlers
   const handleZoomIn = () => {
-    setZoomLevel(prev => Math.min(prev * 1.2, 5)); // Max zoom 5x
+    setZoomLevel(prev => Math.min(prev * ZOOM_STEP, MAX_ZOOM));
   };
 
   const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(prev / 1.2, 0.1)); // Min zoom 0.1x
+    setZoomLevel(prev => Math.max(prev / ZOOM_STEP, MIN_ZOOM));
   };
 
   const handleResetZoom = () => {
@@ -803,8 +809,8 @@ function App() {
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = -e.deltaY / 1000;
-    setZoomLevel(prev => Math.max(0.1, Math.min(5, prev * (1 + delta))));
+    const delta = -e.deltaY / SCROLL_SENSITIVITY;
+    setZoomLevel(prev => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev * (1 + delta))));
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -830,6 +836,14 @@ function App() {
   const handleMouseLeave = () => {
     setIsDragging(false);
   };
+
+  // Memoize transform calculation for performance
+  const contentTransform = useMemo(() => {
+    const combinedScale = scale * zoomLevel;
+    const translateX = panOffset.x / combinedScale;
+    const translateY = panOffset.y / combinedScale;
+    return `scale(${combinedScale}) translate(${translateX}px, ${translateY}px)`;
+  }, [scale, zoomLevel, panOffset]);
 
   // Calculate total product count
   const totalProducts = groceryData.length;
@@ -1003,7 +1017,7 @@ function App() {
         onMouseLeave={handleMouseLeave}
       >
         <div style={{
-          transform: `scale(${scale * zoomLevel}) translate(${panOffset.x / (scale * zoomLevel)}px, ${panOffset.y / (scale * zoomLevel)}px)`,
+          transform: contentTransform,
           transformOrigin: 'center center',
           transition: isDragging ? 'none' : 'transform 0.1s ease-out'
         }}>

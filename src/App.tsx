@@ -783,8 +783,10 @@ function App() {
                 const targetInfo = productPositionIndex.get(connectedProductId);
                 if (targetInfo && targetInfo.clusterIdx === horizontalClusterIdx) {
                   const currentIdx = targetInfo.positionInCluster;
-                  // Only add if we haven't already added a connector for this current product
-                  const alreadyConnected = connectors.some(c => c.toIdx === currentIdx);
+                  // Check if this specific connection (from prevIdx to currentIdx from prevClusterIdx) already exists
+                  const alreadyConnected = connectors.some(c => 
+                    c.fromIdx === prevIdx && c.toIdx === currentIdx && c.targetClusterIdx === prevClusterIdx
+                  );
                   if (!alreadyConnected) {
                     const clusterSpan = currentPosition - prevPos;
                     connectors.push({ 

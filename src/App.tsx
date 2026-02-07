@@ -766,7 +766,7 @@ function App() {
         const isFirst = positionInVertical === 0;
         
         // Calculate vertical connectors - connect to any previous cluster with a declared connection
-        const connectors: Array<{fromIdx: number, toIdx: number, targetClusterIdx: number, clusterSpan: number, fromY: number}> = [];
+        const connectors: Array<{fromIdx: number, toIdx: number, sourceClusterIdx: number, clusterSpan: number, fromY: number}> = [];
         if (!isFirst) {
           const currentPosition = positionInVertical;
           
@@ -785,14 +785,14 @@ function App() {
                   const currentIdx = targetInfo.positionInCluster;
                   // Check if this specific connection (from prevIdx to currentIdx from prevClusterIdx) already exists
                   const alreadyConnected = connectors.some(c => 
-                    c.fromIdx === prevIdx && c.toIdx === currentIdx && c.targetClusterIdx === prevClusterIdx
+                    c.fromIdx === prevIdx && c.toIdx === currentIdx && c.sourceClusterIdx === prevClusterIdx
                   );
                   if (!alreadyConnected) {
                     const clusterSpan = currentPosition - prevPos;
                     connectors.push({ 
                       fromIdx: prevIdx, 
                       toIdx: currentIdx, 
-                      targetClusterIdx: prevClusterIdx, 
+                      sourceClusterIdx: prevClusterIdx, 
                       clusterSpan,
                       fromY: prevClusterY
                     });
@@ -806,7 +806,7 @@ function App() {
         // Draw vertical connectors
         if (!isFirst && connectors.length > 0) {
           connectors.forEach((conn, connIdx) => {
-            const prevOffset = clusterOffsets.get(conn.targetClusterIdx) || 0;
+            const prevOffset = clusterOffsets.get(conn.sourceClusterIdx) || 0;
             const fromX = SVG_PADDING + Math.max(0, prevOffset) + conn.fromIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
             const toX = SVG_PADDING + Math.max(0, offset) + conn.toIdx * (CARD_WIDTH + CARD_GAP + CONNECTOR_WIDTH) + CARD_WIDTH / 2;
             const horizontalOffset = connIdx * HORIZONTAL_CONNECTOR_OFFSET;
